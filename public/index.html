@@ -100,7 +100,7 @@
             <small class="text-warning text-center fw-bold" id="user-role-disp"></small>
         </div>
         
-        <!-- Menu Admin -->
+        <!-- Menu Admin (Monitoring Telah Dihapus) -->
         <ul class="list-unstyled components hidden" id="menu-admin">
             <li><a onclick="loadPage('admin-home')" class="nav-link active"><i class="fas fa-home me-3"></i>Dashboard</a></li>
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
@@ -111,7 +111,7 @@
             <li><a onclick="handleResetCache()" class="nav-link text-warning"><i class="fas fa-bolt me-3"></i>Reset Cache</a></li>
         </ul>        
         
-        <!-- Menu Guru -->
+        <!-- Menu Guru (Monitoring Telah Dihapus) -->
         <ul class="list-unstyled components hidden" id="menu-guru">
             <li><a onclick="loadPage('admin-home')" class="nav-link active"><i class="fas fa-home me-3"></i>Dashboard</a></li>
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
@@ -507,25 +507,39 @@ function loadPage(page) {
     
     if(page === 'admin-users') {
         showLoad(true);
-        google.script.run.withSuccessHandler(r => { showLoad(false); if(r.status === 'success') renderUsers(r.data); else Swal.fire('Error', r.msg, 'error'); }).getUserList(user.Role, user.ID, user.Sekolah);
+        google.script.run
+        .withSuccessHandler(r => { showLoad(false); if(r.status === 'success') renderUsers(r.data); else Swal.fire('Error', r.msg, 'error'); })
+        .withFailureHandler(err => { showLoad(false); Swal.fire('Error', err.message, 'error'); })
+        .getUserList(user.Role, user.ID, user.Sekolah);
         return;
     }
     if(page === 'hasil-rekap') {
         $('#content-area').html('<div class="text-center p-5"><div class="spinner"></div></div>');
-        google.script.run.withSuccessHandler(r => { if(r.status === 'success') { recapAllData = r.data; renderRecapTable(); } else { $('#content-area').html(`<div class="alert alert-danger">${r.msg}</div>`); } }).getRecapList(user.Role, user.ID, user.Sekolah);
+        google.script.run
+        .withSuccessHandler(r => { if(r.status === 'success') { recapAllData = r.data; renderRecapTable(); } else { $('#content-area').html(`<div class="alert alert-danger">${r.msg}</div>`); } })
+        .withFailureHandler(err => { $('#content-area').html(`<div class="alert alert-danger">${err.message}</div>`); })
+        .getRecapList(user.Role, user.ID, user.Sekolah);
         return;
     }
     if(page === 'admin-administrasi') {
         showLoad(true);
-        google.script.run.withSuccessHandler(r => { showLoad(false); if(r.status === 'success') { gAdminData = r; renderAdministrasi(); } else Swal.fire('Error', r.msg, 'error'); }).getAdminData(user.Role, user.ID, user.Kelas, user.Sekolah);
+        google.script.run
+        .withSuccessHandler(r => { showLoad(false); if(r.status === 'success') { gAdminData = r; renderAdministrasi(); } else Swal.fire('Error', r.msg, 'error'); })
+        .withFailureHandler(err => { showLoad(false); Swal.fire('Error', err.message, 'error'); })
+        .getAdminData(user.Role, user.ID, user.Kelas, user.Sekolah);
         return;
     }
     
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         if (res.status === 'success') { gData = res.data; renderContent(page); applyMathJax(); } else Swal.fire('Error', res.msg, 'error');
-    }).getDashboardData(user.Role, user.ID, user.Kelas, user.Sekolah);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message, 'error');
+    })
+    .getDashboardData(user.Role, user.ID, user.Kelas, user.Sekolah);
 }
 
 function encodeImageFileAsURL(element) { let file = element.files[0]; let reader = new FileReader(); reader.onloadend = function() { $('#mu-foto-b64').val(reader.result); }; if(file) reader.readAsDataURL(file); }
@@ -757,10 +771,10 @@ async function bulkDeleteUsers() {
     
     showLoad(false);
     if(successCount > 0) {
-        Swal.fire('Berhasil', `${successCount} akun peserta telah dihapus.${failCount > 0 ? ` (${failCount} gagal, mungkin ada relasi nilai)` : ''}`, 'success');
+        Swal.fire('Berhasil', `${successCount} akun dihapus. ${failCount > 0 ? `(${failCount} gagal karena memiliki rekam nilai)` : ''}`, 'success');
         loadPage('admin-users');
     } else {
-        Swal.fire('Gagal', `Gagal menghapus data. Pastikan peserta tidak terkunci oleh sistem.`, 'error');
+        Swal.fire('Gagal Semua', `Gagal menghapus data. Pastikan peserta yang dipilih tidak memiliki rekap nilai di menu Hasil Nilai (hapus nilainya lebih dulu).`, 'error');
     }
 }
 
