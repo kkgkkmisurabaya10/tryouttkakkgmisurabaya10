@@ -105,7 +105,6 @@
             <li><a onclick="loadPage('admin-ujian')" class="nav-link"><i class="fas fa-calendar-alt me-3"></i>Bank Soal TKA</a></li>
             <li><a onclick="loadPage('admin-survey')" class="nav-link"><i class="fas fa-clipboard-check me-3"></i>Manajemen Survei</a></li>
             <li><a onclick="loadPage('hasil-rekap')" class="nav-link"><i class="fas fa-chart-bar me-3"></i>Hasil Nilai</a></li>
-            <li><a onclick="loadPage('guru-monitoring')" class="nav-link"><i class="fas fa-tv me-3"></i>Live Monitor</a></li>
             <li><a onclick="loadPage('admin-administrasi')" class="nav-link text-info"><i class="fas fa-print me-3"></i>Administrasi</a></li>
             <li><a onclick="handleResetCache()" class="nav-link text-warning"><i class="fas fa-bolt me-3"></i>Reset Cache</a></li>
         </ul>        
@@ -114,7 +113,6 @@
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
             <li><a onclick="loadPage('admin-ujian')" class="nav-link"><i class="fas fa-file-alt me-3"></i>Bank Soal TKA</a></li>
             <li><a onclick="loadPage('hasil-rekap')" class="nav-link"><i class="fas fa-poll me-3"></i>Hasil Nilai</a></li>
-            <li><a onclick="loadPage('guru-monitoring')" class="nav-link"><i class="fas fa-desktop me-3"></i>Live Monitor</a></li>
             <li><a onclick="loadPage('admin-administrasi')" class="nav-link text-info"><i class="fas fa-print me-3"></i>Administrasi</a></li>
         </ul>
 
@@ -403,7 +401,7 @@ window.google = {
 };
 
 let examSubmitting = false; let user = null; let gData = {}; let gAdminData = { exams: [], users: [] };
-let activeExamId = null; let timerInt, monitorInterval, autosaveInterval;
+let activeExamId = null; let timerInt, autosaveInterval;
 let totalQ = 0; let currentQuestionsData = []; let currentQIdx = 0;
 let recapAllData = []; let recapDataStore = {};
 let violationCount = 0; const maxViolations = 3; let isExamFinished = false; let violationLock = false;
@@ -476,7 +474,7 @@ function handleLogout() {
     Swal.fire({ title: 'Keluar Aplikasi?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Keluar', cancelButtonText: 'Batal', confirmButtonColor: '#d33' }).then((r) => {
         if(r.isConfirmed) {
             localStorage.clear(); user = null;
-            clearInterval(timerInt); clearInterval(monitorInterval); clearInterval(autosaveInterval);
+            clearInterval(timerInt); clearInterval(autosaveInterval);
             window.location.href = '/';
         }
     });
@@ -495,7 +493,7 @@ function initDash() {
 }
 function appRefresh() { const activeLink = $('.nav-link.active'); if (activeLink.length > 0) { const onclickAttr = activeLink.attr('onclick'); if(onclickAttr) { const match = onclickAttr.match(/'([^']+)'/); if(match) loadPage(match[1]); } } }
 function loadPage(page) {
-    clearInterval(timerInt); clearInterval(monitorInterval); clearInterval(autosaveInterval); disableSecurity();
+    clearInterval(timerInt); clearInterval(autosaveInterval); disableSecurity();
     $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); $('body').removeClass('exam-mode');
     $('#page-title').text(page.replace('-', ' ').toUpperCase());
     $('.nav-link').removeClass('active'); $(`a[onclick="loadPage('${page}')"]`).addClass('active');
@@ -511,7 +509,6 @@ function loadPage(page) {
         google.script.run.withSuccessHandler(r => { if(r.status === 'success') { recapAllData = r.data; renderRecapTable(); } else { $('#content-area').html(`<div class="alert alert-danger">${r.msg}</div>`); } }).getRecapList(user.Role, user.ID, user.Sekolah);
         return;
     }
-    if(page === 'guru-monitoring') { renderMonitoring(); return; }
     if(page === 'admin-administrasi') {
         showLoad(true);
         google.script.run.withSuccessHandler(r => { showLoad(false); if(r.status === 'success') { gAdminData = r; renderAdministrasi(); } else Swal.fire('Error', r.msg, 'error'); }).getAdminData(user.Role, user.ID, user.Kelas, user.Sekolah);
@@ -526,70 +523,7 @@ function loadPage(page) {
 }
 
 function encodeImageFileAsURL(element) { let file = element.files[0]; let reader = new FileReader(); reader.onloadend = function() { $('#mu-foto-b64').val(reader.result); }; if(file) reader.readAsDataURL(file); }
-function fetchLiveMonitor(isSilent = false) {
-    if(!isSilent) {
-        $('#monitor-grid').html('<div class="col-12 text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Memuat status siswa...</p></div>');
-    }
 
-    google.script.run
-        .withSuccessHandler(res => {
-            if(res.status === 'success') {
-                let h = '';
-                if(!res.data || res.data.length === 0) {
-                    h = '<div class="col-12 alert alert-light text-center py-4 border shadow-sm rounded-4">Belum ada siswa terpantau di sekolah Anda.</div>';
-                } else {
-                    res.data.forEach(u => {
-                        let pct = u.total > 0 ? Math.round((u.terjawab / u.total) * 100) : 0;
-                        if (pct > 100) pct = 100;
-                        let statusColor = u.status === 'Offline' ? 'bg-secondary' : (pct === 100 ? 'bg-success' : 'bg-primary');
-                        
-                        h += `<div class="col-md-4 col-lg-3">
-                                <div class="card shadow-sm border-0 rounded-4 h-100">
-                                    <div class="card-body p-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <span class="fw-bold text-dark text-truncate d-block" style="max-width: 70%;">${u.nama}</span> 
-                                            <span class="badge ${statusColor} rounded-pill">${u.status}</span>
-                                        </div>
-                                        <div class="small text-muted mb-2"><i class="fas fa-user-graduate me-1"></i> Kelas: ${u.kelas || '-'}</div>
-                                        <div class="progress rounded-pill bg-light border" style="height: 12px;">
-                                            <div class="progress-bar ${statusColor}" style="width: ${pct}%"></div>
-                                        </div>
-                                        <div class="small text-end mt-2 fw-bold text-muted">${u.terjawab} / ${u.total} Dijawab</div>
-                                    </div>
-                                </div>
-                              </div>`;
-                    });
-                }
-                $('#monitor-grid').html(h);
-            } else {
-                $('#monitor-grid').html(`<div class="col-12 alert alert-danger text-center">Gagal memuat: ${res.msg}</div>`);
-            }
-        })
-        .withFailureHandler(err => {
-            $('#monitor-grid').html(`<div class="col-12 text-center py-5 text-danger"><i class="fas fa-exclamation-triangle fa-2x mb-2"></i><br>Koneksi server terputus. Sistem akan otomatis mencoba lagi.</div>`);
-        })
-        .getLiveMonitoring(user.ID, user.Role, user.Sekolah);
-}
-
-function renderMonitoring() {
-    let h = `<div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-white shadow-sm border rounded-4">
-                <h5 class="fw-bold text-primary mb-0"><i class="fas fa-desktop me-2"></i>Live Monitoring Ujian</h5>
-                <button class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold" onclick="fetchLiveMonitor()"><i class="fas fa-sync-alt me-1"></i> Segarkan Manual</button>
-             </div>
-             <div class="row g-3" id="monitor-grid">
-                <div class="col-12 text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Memuat status siswa...</p></div>
-             </div>`;
-    
-    $('#content-area').html(h);
-    fetchLiveMonitor();
-    
-    clearInterval(monitorInterval);
-    monitorInterval = setInterval(() => {
-        if ($('#monitor-grid').length > 0) fetchLiveMonitor(true);
-        else clearInterval(monitorInterval);
-    }, 300000);
-}
-    
 function renderUsers(users) {
     window.allUsersData = users;
     const role = String(user.Role).trim().toLowerCase();
@@ -1576,42 +1510,50 @@ function renderContent(page) {
         const globalSesi = gData.sesiAktif || '1';
         const isSesiValid = (globalSesi === 'ALL' || String(mySesi) === String(globalSesi));
         
+        // Filter exams based on StartDate, EndDate and TargetKelas
+        let validExams = [];
+        if (gData.availableExams && gData.availableExams.length > 0) {
+            const now = Date.now();
+            gData.availableExams.forEach(e => {
+                let matchClass = false;
+                let tKelas = String(e.TargetKelas || '').trim().toLowerCase();
+                let uKelas = String(user.Kelas || '').trim().toLowerCase();
+                
+                // Allow if TargetKelas is 'all', 'semua', empty, or matches user class exactly, or if user class is inside TargetKelas (e.g. "6A, 6B")
+                if (tKelas === 'all' || tKelas === 'semua' || tKelas === '' || tKelas === uKelas || tKelas.includes(uKelas)) {
+                    matchClass = true;
+                }
+
+                let isTimeValid = true;
+                if (e.StartDate && e.EndDate) {
+                    const tStart = new Date(e.StartDate).getTime();
+                    const tEnd = new Date(e.EndDate).getTime();
+                    if (now < tStart || now > tEnd) {
+                        isTimeValid = false;
+                    }
+                }
+
+                if (matchClass && isTimeValid) {
+                    validExams.push(e);
+                }
+            });
+        }
+
         h = `<div class="card mb-4 border-0 shadow-sm rounded-4 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f5132, #d4af37);"><div class="card-body p-4"><div class="d-flex align-items-center"><img src="${user.Foto || 'https://via.placeholder.com/60'}" class="rounded-circle me-4 shadow" width="70" height="70" style="object-fit:cover; border:3px solid #fff;"><div class="text-start"><h4 class="fw-bold m-0 text-white">Assalamu'alaikum, ${user.Nama}</h4><p class="m-0 text-white-50"><i class="fas fa-school me-1"></i> ${user.Sekolah} | Kelas ${user.Kelas} | Sesi ${mySesi}</p></div></div></div></div>
         
         ${!isSesiValid ? `<div class="alert alert-danger shadow-sm rounded-4 fw-bold mb-4"><i class="fas fa-exclamation-triangle me-2"></i> Perhatian: Sesi Anda (Sesi ${mySesi}) belum aktif saat ini. Anda belum bisa memulai ujian!</div>` : ''}
         
         <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary"><i class="fas fa-edit me-2"></i>Ujian Aktif Saat Ini</h5><div class="row g-4 mb-5">`;
         
-        if(!gData.availableExams || gData.availableExams.length === 0) { h += '<div class="col-12"><div class="alert alert-light border border-secondary text-center py-5 rounded-4 shadow-sm text-muted"><i class="fas fa-box-open fa-3x mb-3 text-secondary opacity-50"></i><br>Belum ada jadwal ujian yang aktif untuk Anda saat ini.</div></div>'; } 
+        if(validExams.length === 0) { 
+            h += '<div class="col-12"><div class="alert alert-light border border-secondary text-center py-5 rounded-4 shadow-sm text-muted"><i class="fas fa-box-open fa-3x mb-3 text-secondary opacity-50"></i><br>Belum ada jadwal ujian yang aktif untuk Anda saat ini.</div></div>'; 
+        } 
         else {
-            const now = Date.now();
-            gData.availableExams.forEach(e => {
-                // Validasi Rentang Waktu (StartDate - EndDate)
-                let isTimeValid = true;
-                let timeStatusMsg = '';
-                
-                if (e.StartDate && e.EndDate) {
-                    const tStart = new Date(e.StartDate).getTime();
-                    const tEnd = new Date(e.EndDate).getTime();
-                    
-                    if (now < tStart) {
-                        isTimeValid = false;
-                        timeStatusMsg = 'BELUM DIMULAI';
-                    } else if (now > tEnd) {
-                        isTimeValid = false;
-                        timeStatusMsg = 'WAKTU HABIS';
-                    }
-                }
-
+            validExams.forEach(e => {
                 let btnState = '', btnText = '<i class="fas fa-play-circle me-2"></i> MULAI UJIAN', btnClass = 'btn-primary';
                 
-                if (e.IsFinished) { 
-                    btnState = 'disabled'; btnText = '<i class="fas fa-check me-2"></i> SUDAH DIKERJAKAN'; btnClass = 'btn-secondary'; 
-                } else if (!isSesiValid) { 
-                    btnState = 'disabled'; btnText = '<i class="fas fa-lock me-2"></i> SESI BELUM AKTIF'; btnClass = 'btn-secondary'; 
-                } else if (!isTimeValid) {
-                    btnState = 'disabled'; btnText = `<i class="fas fa-clock me-2"></i> ${timeStatusMsg}`; btnClass = 'btn-secondary';
-                }
+                if (e.IsFinished) { btnState = 'disabled'; btnText = '<i class="fas fa-check me-2"></i> SUDAH DIKERJAKAN'; btnClass = 'btn-secondary'; }
+                else if (!isSesiValid) { btnState = 'disabled'; btnText = '<i class="fas fa-lock me-2"></i> SESI BELUM AKTIF'; btnClass = 'btn-secondary'; }
 
                 h += `<div class="col-md-6 col-lg-4"><div class="card h-100 shadow-sm border-0 rounded-4 overflow-hidden transition-hover"><div class="card-body p-4 text-center"><span class="badge bg-light text-primary border border-primary px-3 py-2 rounded-pill mb-3 fw-bold">${e.Mapel}</span><h5 class="fw-bold text-dark mb-3">${e.Judul}</h5><p class="small text-muted mb-4"><i class="fas fa-stopwatch me-1"></i> Waktu TKA: <b>${e.Durasi} Menit</b></p><button class="btn ${btnClass} w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="startExam('${e.ExamID}')" ${btnState}>${btnText}</button></div></div></div>`;
             });
@@ -2153,8 +2095,17 @@ function runExam(qs, dur, isResume) {
         if(diff <= 0) { 
             clearInterval(timerInt);
             $('#timer-disp').text('HABIS');
-            const randomDelay = Math.floor(Math.random() * 30000);
-            setTimeout(() => { submitExamButton(true); }, randomDelay);
+            if(!isExamFinished) {
+                Swal.fire({
+                    title: 'WAKTU HABIS!',
+                    text: 'Waktu pengerjaan telah selesai. Jawaban Anda akan otomatis dikirim dan disimpan.',
+                    icon: 'warning',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    allowOutsideClick: false
+                });
+                setTimeout(() => { submitExamButton(true); }, 3000);
+            }
         }
         else { 
             let m = Math.floor(diff/60), s = diff%60; 
@@ -2162,9 +2113,6 @@ function runExam(qs, dur, isResume) {
             if(diff < 300) $('#timer-disp').parent().removeClass('border-danger text-danger bg-white').addClass('bg-danger text-white border-white shadow'); 
         }
     }, 1000);
-    
-    clearInterval(monitorInterval);
-    clearInterval(autosaveInterval);
 }
     
 function saveAnsLocal(qid, type, idx) {
@@ -2247,7 +2195,7 @@ function processSubmission(retryCount = 0) {
     const btn = $('#btn-finish'); const originalText = '<i class="fas fa-check-circle me-2"></i> Selesai Ujian';
     if (retryCount === 0) {
         btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Mengirim Data...');
-        clearInterval(timerInt); clearInterval(monitorInterval); clearInterval(autosaveInterval);
+        clearInterval(timerInt);
         isExamFinished = true; disableSecurity();
     }
     let ans = [];
