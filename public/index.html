@@ -606,9 +606,10 @@ function renderUserRows(data) {
         h = `<tr><td colspan="${isAdmin ? 8 : (canEdit ? 7 : 6)}" class="text-center text-muted py-4">Data peserta tidak ditemukan.</td></tr>`;
     } else {
         data.forEach(u => {
+            const uid = u.ID || u.id; 
             const safeData = encodeURIComponent(JSON.stringify(u));
             h += `<tr>
-                ${isAdmin ? `<td><input type="checkbox" class="form-check-input check-user" value="${u.ID}" onchange="toggleBulkDeleteUsersBtn()"></td>` : ''}
+                ${isAdmin ? `<td><input type="checkbox" class="form-check-input check-user" value="${uid}" onchange="toggleBulkDeleteUsersBtn()"></td>` : ''}
                 <td>
                     <div class="d-flex align-items-center">
                         <img src="${u.Foto || 'https://via.placeholder.com/40'}" class="rounded-circle me-3 shadow-sm" width="40" height="40" style="object-fit:cover;">
@@ -622,7 +623,7 @@ function renderUserRows(data) {
                 <td>${u.Sekolah || '-'}</td>
                 ${canEdit ? `<td>
                     <button class="btn btn-sm btn-outline-dark me-1 rounded-circle" onclick="editUser('${safeData}')" title="Edit"><i class="fas fa-edit"></i></button>
-                    ${isAdmin ? `<button class="btn btn-sm btn-outline-danger rounded-circle" onclick="delUser('${u.ID}')" title="Hapus"><i class="fas fa-trash"></i></button>` : ''}
+                    ${isAdmin ? `<button class="btn btn-sm btn-outline-danger rounded-circle" onclick="delUser('${uid}')" title="Hapus"><i class="fas fa-trash"></i></button>` : ''}
                 </td>` : ''}
             </tr>`;
         });
@@ -651,7 +652,7 @@ async function handleBulkPhotoUpload(event) {
             });
             
             let updatedUser = {
-                id: matchedUser.ID,
+                id: matchedUser.ID || matchedUser.id,
                 nama: matchedUser.Nama,
                 tglLahir: matchedUser.TglLahir,
                 username: matchedUser.Username,
@@ -735,20 +736,32 @@ async function bulkDeleteUsers() {
 
     showLoad(true);
     let successCount = 0;
+    let failCount = 0;
     
     for(let i = 0; i < checked.length; i++) {
         const uid = $(checked[i]).val();
         await new Promise(resolve => {
             google.script.run
-                .withSuccessHandler(() => { successCount++; resolve(); })
-                .withFailureHandler(() => resolve())
+                .withSuccessHandler((res) => { 
+                    if(res && res.status === 'success') successCount++; 
+                    else failCount++;
+                    resolve(); 
+                })
+                .withFailureHandler((err) => { 
+                    failCount++; 
+                    resolve(); 
+                })
                 .adminManageUser('delete', { id: uid });
         });
     }
     
     showLoad(false);
-    Swal.fire('Berhasil', `${successCount} akun peserta telah dihapus.`, 'success');
-    loadPage('admin-users');
+    if(successCount > 0) {
+        Swal.fire('Berhasil', `${successCount} akun peserta telah dihapus.${failCount > 0 ? ` (${failCount} gagal, mungkin ada relasi nilai)` : ''}`, 'success');
+        loadPage('admin-users');
+    } else {
+        Swal.fire('Gagal', `Gagal menghapus data. Pastikan peserta tidak terkunci oleh sistem.`, 'error');
+    }
 }
 
 function downloadUserTemplate() {
@@ -822,7 +835,8 @@ function downloadHTMLToPDF(filename, htmlContent) {
 
 function downloadAllQAdmin(eid) {
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
             let htmlContent = '';
@@ -831,7 +845,11 @@ function downloadAllQAdmin(eid) {
             const judul = exam ? exam.Judul : 'Arsip_Soal_Guru';
             downloadHTMLToPDF(`Soal_TKA_${judul}`, htmlContent);
         } else { Swal.fire('Error', res.msg, 'error'); }
-    }).getSiswaSoal(eid);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Gagal tersambung ke server', 'error');
+    })
+    .getSiswaSoal(eid);
 }
 
 function renderRecapTable() {
@@ -1027,35 +1045,54 @@ async function bulkDeleteResults() {
 
     showLoad(true);
     let successCount = 0;
+    let failCount = 0;
     
     for(let i = 0; i < checked.length; i++) {
         const rid = $(checked[i]).val();
         await new Promise(resolve => {
-            google.script.run.withSuccessHandler(() => { successCount++; resolve(); }).withFailureHandler(() => resolve()).adminDeleteResult(rid);
+            google.script.run
+            .withSuccessHandler((res) => { 
+                if(res && res.status === 'success') successCount++; 
+                else failCount++;
+                resolve(); 
+            })
+            .withFailureHandler((err) => { failCount++; resolve(); })
+            .adminDeleteResult(rid);
         });
     }
     
     showLoad(false);
-    Swal.fire('Berhasil', `${successCount} data telah dihapus.`, 'success');
-    loadPage('hasil-rekap');
+    if(successCount > 0) {
+        Swal.fire('Berhasil', `${successCount} data telah dihapus.${failCount > 0 ? ` (${failCount} gagal)` : ''}`, 'success');
+        loadPage('hasil-rekap');
+    } else {
+        Swal.fire('Gagal', `Gagal menghapus data.`, 'error');
+    }
 }
 
 function delResult(rid) {
     Swal.fire({ title: 'Hapus Nilai Secara Permanen?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => {
         if(r.isConfirmed) {
             showLoad(true);
-            google.script.run.withSuccessHandler(res => {
+            google.script.run
+            .withSuccessHandler(res => {
                 showLoad(false);
-                if(res.status === 'success') { loadPage('hasil-rekap'); toast('success', res.msg); }
-                else { Swal.fire('Error', res.msg, 'error'); }
-            }).adminDeleteResult(rid);
+                if(res && res.status === 'success') { loadPage('hasil-rekap'); toast('success', res.msg); }
+                else { Swal.fire('Error', res ? res.msg : 'Unknown error', 'error'); }
+            })
+            .withFailureHandler(err => {
+                showLoad(false);
+                Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+            })
+            .adminDeleteResult(rid);
         }
     });
 }
 
 function dlSiswaSoal(eid) {
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
             let htmlContent = '';
@@ -1064,7 +1101,11 @@ function dlSiswaSoal(eid) {
             const judul = history ? history.Judul : 'Arsip_File_Soal_Siswa';
             downloadHTMLToPDF(`Soal_${judul}`, htmlContent);
         } else { Swal.fire('Error', res.msg, 'error'); }
-    }).getSiswaSoal(eid);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Gagal terhubung', 'error');
+    })
+    .getSiswaSoal(eid);
 }
 
 function printFilteredRecap() {
@@ -1187,7 +1228,6 @@ function renderAdministrasi() {
     let optKelas = `<option value="ALL">Semua Kelas</option>` + uniqueKelas.map(k => `<option value="${k}">${k}</option>`).join('');
     let optUjian = `<option value="">-- Pilih Ujian --</option>` + gAdminData.exams.map(e => `<option value="${e.ExamID}">${e.Judul} (${e.Mapel})</option>`).join('');
     
-    // Opsi Filter Sesi
     let optSesi = `<option value="ALL">Semua Sesi</option><option value="1">Sesi 1</option><option value="2">Sesi 2</option><option value="3">Sesi 3</option>`;
 
     let h = `
@@ -1359,14 +1399,19 @@ function printBeritaAcara() {
 
 function updateSesiGlobal(newSesi) {
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
             gData.sesiAktif = newSesi;
             toast('success', 'Sesi Aktif Diperbarui!');
             renderContent('admin-home');
         }
-    }).adminUpdateSesiGlobal(newSesi);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Kesalahan Server', 'error');
+    })
+    .adminUpdateSesiGlobal(newSesi);
 }
 
 function simpanJamSesi() {
@@ -1374,7 +1419,8 @@ function simpanJamSesi() {
     const s2 = $('#set-jam-2').val();
     const s3 = $('#set-jam-3').val();
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
             gData.jamSesi1 = s1; gData.jamSesi2 = s2; gData.jamSesi3 = s3;
@@ -1383,7 +1429,11 @@ function simpanJamSesi() {
         } else {
             Swal.fire('Error', res.msg, 'error');
         }
-    }).adminUpdateJamSesi({s1: s1, s2: s2, s3: s3});
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Kesalahan Server', 'error');
+    })
+    .adminUpdateJamSesi({s1: s1, s2: s2, s3: s3});
 }
 
 function renderContent(page) {
@@ -1616,12 +1666,17 @@ function saveSurveyHeader() {
     if(!d.linkedExam) return Swal.fire('Error', 'Wajib memilih Ujian TKA mana yang akan memicu survei ini!', 'warning');
     
     showLoad(true);
-    google.script.run.withSuccessHandler((res) => {
+    google.script.run
+    .withSuccessHandler((res) => {
         if(res.status === 'success') {
             $('#modalSurvey').modal('hide');
             google.script.run.withSuccessHandler(res2 => { showLoad(false); gData = res2.data; renderContent('admin-survey'); toast('success', 'Survei Tersimpan!'); }).getDashboardData(user.Role, user.ID, user.Kelas, user.Sekolah);
         } else { showLoad(false); Swal.fire('Gagal', res.msg, 'error'); }
-    }).adminSaveSurvey(d);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+    })
+    .adminSaveSurvey(d);
 }
 
 function openExamModal(str) {
@@ -1645,15 +1700,35 @@ function saveExam() {
   if (!d.judul || !d.mapel || !d.start || !d.end || !d.targetKelas) { return Swal.fire('Error', 'Lengkapi data!', 'error'); }
   
   showLoad(true);
-  google.script.run.withSuccessHandler((res) => {
+  google.script.run
+  .withSuccessHandler((res) => {
     if(res.status === 'success') {
       $('#modalExam').modal('hide');
       google.script.run.withSuccessHandler(res2 => { showLoad(false); if (res2.status === 'success') { gData = res2.data; renderContent('admin-ujian'); toast('success', 'Jadwal Disimpan!'); } }).getDashboardData(user.Role, user.ID, user.Kelas, user.Sekolah);
     } else { showLoad(false); Swal.fire('Gagal', res.msg, 'error'); }
-  }).adminSaveExam(d);
+  })
+  .withFailureHandler(err => {
+      showLoad(false); Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+  })
+  .adminSaveExam(d);
 }
 
-function delExam(id){ Swal.fire({title:'Hapus Permanen?', icon:'warning', showCancelButton:true, confirmButtonColor: '#d33'}).then(r=>{if(r.isConfirmed) google.script.run.withSuccessHandler(()=>{ if(isSurveyMode){ loadPage('admin-survey') } else { loadPage('admin-ujian') } }).adminDeleteExam(id)}) }
+function delExam(id){ 
+    Swal.fire({title:'Hapus Permanen?', icon:'warning', showCancelButton:true, confirmButtonColor: '#d33'}).then(r=>{
+        if(r.isConfirmed){
+            showLoad(true);
+            google.script.run
+            .withSuccessHandler(()=>{ 
+                showLoad(false);
+                if(isSurveyMode){ loadPage('admin-survey') } else { loadPage('admin-ujian') } 
+            })
+            .withFailureHandler(err => {
+                showLoad(false); Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+            })
+            .adminDeleteExam(id)
+        }
+    }); 
+}
 
 function manageQ(id) { 
     activeExamId = id; 
@@ -1677,17 +1752,23 @@ function handleUploadQuestionsExcel(e) {
         }).filter(q => q.text !== '');
         if(formattedData.length === 0) return Swal.fire('Error', 'Format data tidak valid.', 'error');
         showLoad(true);
-        google.script.run.withSuccessHandler(res => {
+        google.script.run
+        .withSuccessHandler(res => {
             showLoad(false);
             if(res.status === 'success') { Swal.fire('Sukses', res.msg, 'success'); loadQList(); } else Swal.fire('Gagal', res.msg, 'error');
-        }).adminBatchSaveQuestions(activeExamId, formattedData, user.ID);
+        })
+        .withFailureHandler(err => {
+            showLoad(false); Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+        })
+        .adminBatchSaveQuestions(activeExamId, formattedData, user.ID);
     };
     reader.readAsBinaryString(file);
 }
 
 function loadQList() {
     $('#q-list-container').html('<div class="text-center p-5"><div class="spinner"></div></div>');
-    google.script.run.withSuccessHandler(qs => {
+    google.script.run
+    .withSuccessHandler(qs => {
         let html = ''; lastQuestionNum = 0; currentQuestionsData = qs || [];
         let topActions = '';
         if(!isSurveyMode) {
@@ -1705,7 +1786,11 @@ function loadQList() {
             $('#q-list-container').html(topActions + html);
             applyMathJax();
         } else { $('#q-list-container').html(topActions + '<div class="alert alert-info text-center rounded-4 shadow-sm mt-4"><i class="fas fa-info-circle fa-2x mb-2 d-block"></i>Belum ada data. Silakan klik Tambah Baru.</div>'); }
-    }).getExamQuestions(activeExamId);
+    })
+    .withFailureHandler(err => {
+        $('#q-list-container').html(`<div class="alert alert-danger">Gagal memuat soal: ${err.message}</div>`);
+    })
+    .getExamQuestions(activeExamId);
 }
 
 function generateQHTML(q) {
@@ -1747,13 +1832,18 @@ function downloadAllQ() {
 
 function dlSiswaHasil(rid) {
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
             recapDataStore[rid] = { detail: res.data.Detail, nama: user.Nama, ujian: res.data.Judul, nilai: res.data.TotalNilai, pembuat: 'Pengawas Sekolah' };
             printRecap(rid);
         } else { Swal.fire('Error', res.msg, 'error'); }
-    }).getSiswaDetailHasil(rid);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+    })
+    .getSiswaDetailHasil(rid);
 }
 
 function addNewQuestionBlock() {
@@ -1853,24 +1943,6 @@ function downloadQuestionTemplate() {
     XLSX.writeFile(wb, "Template_Upload_Soal_CBT.xlsx");
 }
 
-function delUser(uid) {
-    Swal.fire({
-        title: 'Hapus Peserta?',
-        text: 'Data peserta ini akan dihapus permanen.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33'
-    }).then(r => {
-        if(r.isConfirmed) {
-            showLoad(true);
-            google.script.run.withSuccessHandler(res => {
-                showLoad(false);
-                if(res.status === 'success') { toast('success', res.msg); loadPage('admin-users'); }
-                else Swal.fire('Error', res.msg, 'error');
-            }).adminManageUser('delete', {id: uid});
-        }
-    });
-}
 
 function toggleEditQ(uid) { 
     const form = $(`#form-${uid}`); 
@@ -1960,7 +2032,8 @@ function saveQBlock(uid) {
     const payload={id:id, num:num, type:type, text:text, options:opts, key:keys, keyIndices:keyIndices, score:score}; 
     const btn=form.find('button[type="submit"]'); btn.prop('disabled',true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
     
-    google.script.run.withSuccessHandler(res=>{
+    google.script.run
+    .withSuccessHandler(res=>{
         btn.prop('disabled',false).html('<i class="fas fa-save me-1"></i> Simpan Data');
         if(res.status==='success'){
             toast('success','Data Berhasil Disimpan!');
@@ -1972,14 +2045,32 @@ function saveQBlock(uid) {
             if (existingIdx !== -1) currentQuestionsData[existingIdx] = newData;
             else { currentQuestionsData.push(newData); currentQuestionsData.sort((a,b) => (Number(a.Nomor)||999) - (Number(b.Nomor)||999)); }
         } else Swal.fire('Error',res.msg,'error');
-    }).adminSaveSingleQuestion(activeExamId, payload, user.ID);
+    })
+    .withFailureHandler(err => {
+        btn.prop('disabled',false).html('<i class="fas fa-save me-1"></i> Simpan Data');
+        Swal.fire('Error', err.message || 'Kesalahan Server', 'error');
+    })
+    .adminSaveSingleQuestion(activeExamId, payload, user.ID);
 }
 
 function deleteQBlock(uid) {
     const id=$(`#block-${uid}`).find('input[name="id"]').val();
     if(!id){ $(`#block-${uid}`).remove(); return; }
     Swal.fire({title:'Hapus Permanen?',icon:'warning',showCancelButton:true, confirmButtonColor: '#d33'}).then(r=>{
-        if(r.isConfirmed){ $(`#block-${uid}`).fadeOut(); google.script.run.adminDeleteQuestion(id); currentQuestionsData = currentQuestionsData.filter(q => String(q.QID) !== String(id)); }
+        if(r.isConfirmed){ 
+            showLoad(true);
+            google.script.run
+            .withSuccessHandler(res => {
+                showLoad(false);
+                $(`#block-${uid}`).fadeOut(); 
+                currentQuestionsData = currentQuestionsData.filter(q => String(q.QID) !== String(id));
+            })
+            .withFailureHandler(err => {
+                showLoad(false);
+                Swal.fire('Error', err.message || 'Kesalahan Server', 'error');
+            })
+            .adminDeleteQuestion(id); 
+        }
     });
 }
 
@@ -2028,7 +2119,8 @@ function startExam(eid) {
         if(r.isConfirmed) {
             if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch((err) => {}); }
             showLoad(true);
-            google.script.run.withSuccessHandler(res => {
+            google.script.run
+            .withSuccessHandler(res => {
                 showLoad(false);
                 if(res.status === 'success') {
                     localStorage.removeItem(`ANS_${user.ID}_${eid}`);
@@ -2037,7 +2129,11 @@ function startExam(eid) {
                     try { localStorage.setItem('cbt_active_exam', JSON.stringify({ id: eid, qs: res.data, dur: res.duration, start: Date.now(), judul: res.judul, token: res.token })); } catch(e) {}
                     violationCount = 0; enableSecurity(); runExam(res.data, res.duration, false);
                 } else Swal.fire('Gagal Mengunduh Soal', res.msg, 'error');
-            }).getExamPack(eid, user.ID);
+            })
+            .withFailureHandler(err => {
+                showLoad(false); Swal.fire('Error', err.message || 'Kesalahan koneksi', 'error');
+            })
+            .getExamPack(eid, user.ID);
         }
     });
 }
@@ -2222,7 +2318,7 @@ function processSubmission(retryCount = 0) {
     let ans = [];
     try {
         $('.q-slide').each(function(idx) {
-            const qid = $(this).data('qid'); const t =$(this).data('type'); let v = null;
+            const qid = $(this).data('qid'); const t = $(this).data('type'); let v = null;
             if (t.includes('PG') && t !== 'PGKK') {
                 if (t === 'PGK') { v = []; $(this).find('input:checked').each(function() { v.push(decodeURIComponent($(this).val())) }); }
                 else { const checked = $(this).find('input:checked').val(); if(checked) v = decodeURIComponent(checked); }
@@ -2237,13 +2333,15 @@ function processSubmission(retryCount = 0) {
     const d = new Date();
     const localTime = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
     
-    google.script.run.withSuccessHandler((res) => {
+    google.script.run
+    .withSuccessHandler((res) => {
         examSubmitting = false; btn.prop('disabled', false).html(originalText);
         if (res.status === 'success') {
             localStorage.removeItem('cbt_active_exam'); localStorage.removeItem(`ANS_${user.ID}_${activeExamId}`);
             
             showLoad(true);
-            google.script.run.withSuccessHandler(surveyRes => {
+            google.script.run
+            .withSuccessHandler(surveyRes => {
                 showLoad(false);
                 if(surveyRes.status === 'success' && surveyRes.data) {
                     $('body').removeClass('exam-mode');$('#view-exam').addClass('hidden');
@@ -2258,10 +2356,18 @@ function processSubmission(retryCount = 0) {
                         confirmButtonText: 'KEMBALI KE BERANDA', confirmButtonColor: '#0f5132', allowOutsideClick: false, allowEscapeKey: false
                     }).then(() => { $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home'); });
                 }
-            }).checkActiveSurvey(activeExamId);
+            })
+            .withFailureHandler(err => {
+                showLoad(false);
+                Swal.fire('Selesai', 'Ujian telah terkirim.', 'success').then(() => {
+                    $('body').removeClass('exam-mode'); $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home');
+                });
+            })
+            .checkActiveSurvey(activeExamId);
             
         } else { Swal.fire('Gagal', res.msg || 'Terjadi kesalahan sistem.', 'error'); }
-    }).withFailureHandler((err) => {
+    })
+    .withFailureHandler((err) => {
         if (retryCount < 3) { setTimeout(() => processSubmission(retryCount + 1), 3000); } 
         else { examSubmitting = false; btn.prop('disabled', false).html(originalText); Swal.fire('Koneksi Terputus', 'Gagal menghubungi server.', 'error'); }
     }).submitExam(user.ID, activeExamId, ans, violationCount, localTime);
@@ -2383,13 +2489,18 @@ function submitSurvey() {
     const localTime = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
     
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false); $('#view-survey').addClass('hidden');
         try { document.exitFullscreen().catch(()=>{}) } catch (e) {};
         Swal.fire({ title: 'Terima Kasih!', text: 'Respon evaluasi survei Anda telah kami terima dengan baik.', icon: 'success', confirmButtonColor: '#0f5132', allowOutsideClick: false }).then(() => {
             $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home');
         });
-    }).submitSurveyResponse(user.ID, window.activeSurveyData.header.ExamID, answers, localTime);
+    })
+    .withFailureHandler(err => {
+        showLoad(false); Swal.fire('Error', err.message || 'Kesalahan Server', 'error');
+    })
+    .submitSurveyResponse(user.ID, window.activeSurveyData.header.ExamID, answers, localTime);
 }
 
 function decodeHTML(htmlText) {
@@ -2409,16 +2520,19 @@ function handleResetCache() {
     }).then((r) => {
         if(r.isConfirmed) {
             localStorage.removeItem('cbt_active_exam');
-            google.script.run.withSuccessHandler(() => {
+            google.script.run
+            .withSuccessHandler(() => {
                 window.location.reload(true);
-            }).sysResetCache();
+            })
+            .withFailureHandler(() => { window.location.reload(true); })
+            .sysResetCache();
         }
     });
 }
 
 function editUser(str) {
     const d = JSON.parse(decodeURIComponent(str));
-    $('#mu-id').val(d.ID);
+    $('#mu-id').val(d.ID || d.id);
     $('#mu-nama').val(d.Nama);
     $('#mu-tgl').val(d.TglLahir || '');
     $('#mu-user').val(d.Username);
@@ -2455,7 +2569,8 @@ function saveUser() {
     btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i> MENYIMPAN...');
     
     showLoad(true);
-    google.script.run.withSuccessHandler(res => {
+    google.script.run
+    .withSuccessHandler(res => {
         showLoad(false);
         btn.prop('disabled', false).html(originalText);
         
@@ -2466,11 +2581,13 @@ function saveUser() {
         } else {
             Swal.fire('Gagal Menyimpan', res.msg, 'error');
         }
-    }).withFailureHandler(err => {
+    })
+    .withFailureHandler(err => {
         showLoad(false);
         btn.prop('disabled', false).html(originalText);
-        Swal.fire('Koneksi Terputus', 'Gagal menghubungi server.', 'error');
-    }).adminManageUser('save', d);
+        Swal.fire('Koneksi Terputus', err.message || 'Gagal menghubungi server.', 'error');
+    })
+    .adminManageUser('save', d);
 }
     
 </script>
