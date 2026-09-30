@@ -1257,7 +1257,8 @@ function renderAdministrasi() {
                 <div class="card-body p-4 text-center">
                     <div class="display-4 text-primary mb-3"><i class="fas fa-id-card"></i></div>
                     <h5 class="fw-bold text-dark">Cetak Kartu Login</h5>
-                    <select id="adm-kls-kartu" class="form-select mb-2 bg-light border-0 rounded-pill px-3">${optKelas}</select>
+                    <p class="small text-muted mb-4">Cetak kartu berfoto untuk akses CBT Siswa.</p>
+                    <select id="adm-kls-kartu" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optKelas}</select>
                     <select id="adm-sesi-kartu" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optSesi}</select>
                     <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="printKartuLogin()"><i class="fas fa-print me-1"></i> Cetak Kartu</button>
                 </div>
@@ -1268,8 +1269,9 @@ function renderAdministrasi() {
                 <div class="card-body p-4 text-center">
                     <div class="display-4 text-info mb-3"><i class="fas fa-clipboard-list"></i></div>
                     <h5 class="fw-bold text-dark">Daftar Hadir Ujian</h5>
+                    <p class="small text-muted mb-4">Format absensi siswa saat pelaksanaan ujian.</p>
                     <select id="adm-exam-hadir" class="form-select mb-2 bg-light border-0 rounded-pill px-3">${optUjian}</select>
-                    <select id="adm-kls-hadir" class="form-select mb-2 bg-light border-0 rounded-pill px-3">${optKelas}</select>
+                    <select id="adm-kls-hadir" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optKelas}</select>
                     <select id="adm-sesi-hadir" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optSesi}</select>
                     <button class="btn btn-info text-white w-100 rounded-pill fw-bold" onclick="printDaftarHadir()"><i class="fas fa-print me-1"></i> Cetak Absensi</button>
                 </div>
@@ -1280,8 +1282,9 @@ function renderAdministrasi() {
                 <div class="card-body p-4 text-center">
                     <div class="display-4 text-success mb-3"><i class="fas fa-file-signature"></i></div>
                     <h5 class="fw-bold text-dark">Berita Acara</h5>
+                    <p class="small text-muted mb-4">Format laporan pelaksanaan untuk Pengawas.</p>
                     <select id="adm-exam-ba" class="form-select mb-2 bg-light border-0 rounded-pill px-3">${optUjian}</select>
-                    <select id="adm-kls-ba" class="form-select mb-2 bg-light border-0 rounded-pill px-3">${optKelas}</select>
+                    <select id="adm-kls-ba" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optKelas}</select>
                     <select id="adm-sesi-ba" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optSesi}</select>
                     <button class="btn btn-success w-100 rounded-pill fw-bold" onclick="printBeritaAcara()"><i class="fas fa-print me-1"></i> Cetak Laporan</button>
                 </div>
@@ -1581,11 +1584,34 @@ function renderContent(page) {
         
         if(!gData.availableExams || gData.availableExams.length === 0) { h += '<div class="col-12"><div class="alert alert-light border border-secondary text-center py-5 rounded-4 shadow-sm text-muted"><i class="fas fa-box-open fa-3x mb-3 text-secondary opacity-50"></i><br>Belum ada jadwal ujian yang aktif untuk Anda saat ini.</div></div>'; } 
         else {
+            const now = Date.now();
             gData.availableExams.forEach(e => {
+                // Validasi Rentang Waktu (StartDate - EndDate)
+                let isTimeValid = true;
+                let timeStatusMsg = '';
+                
+                if (e.StartDate && e.EndDate) {
+                    const tStart = new Date(e.StartDate).getTime();
+                    const tEnd = new Date(e.EndDate).getTime();
+                    
+                    if (now < tStart) {
+                        isTimeValid = false;
+                        timeStatusMsg = 'BELUM DIMULAI';
+                    } else if (now > tEnd) {
+                        isTimeValid = false;
+                        timeStatusMsg = 'WAKTU HABIS';
+                    }
+                }
+
                 let btnState = '', btnText = '<i class="fas fa-play-circle me-2"></i> MULAI UJIAN', btnClass = 'btn-primary';
                 
-                if (e.IsFinished) { btnState = 'disabled'; btnText = '<i class="fas fa-check me-2"></i> SUDAH DIKERJAKAN'; btnClass = 'btn-secondary'; }
-                else if (!isSesiValid) { btnState = 'disabled'; btnText = '<i class="fas fa-lock me-2"></i> SESI BELUM AKTIF'; btnClass = 'btn-secondary'; }
+                if (e.IsFinished) { 
+                    btnState = 'disabled'; btnText = '<i class="fas fa-check me-2"></i> SUDAH DIKERJAKAN'; btnClass = 'btn-secondary'; 
+                } else if (!isSesiValid) { 
+                    btnState = 'disabled'; btnText = '<i class="fas fa-lock me-2"></i> SESI BELUM AKTIF'; btnClass = 'btn-secondary'; 
+                } else if (!isTimeValid) {
+                    btnState = 'disabled'; btnText = `<i class="fas fa-clock me-2"></i> ${timeStatusMsg}`; btnClass = 'btn-secondary';
+                }
 
                 h += `<div class="col-md-6 col-lg-4"><div class="card h-100 shadow-sm border-0 rounded-4 overflow-hidden transition-hover"><div class="card-body p-4 text-center"><span class="badge bg-light text-primary border border-primary px-3 py-2 rounded-pill mb-3 fw-bold">${e.Mapel}</span><h5 class="fw-bold text-dark mb-3">${e.Judul}</h5><p class="small text-muted mb-4"><i class="fas fa-stopwatch me-1"></i> Waktu TKA: <b>${e.Durasi} Menit</b></p><button class="btn ${btnClass} w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="startExam('${e.ExamID}')" ${btnState}>${btnText}</button></div></div></div>`;
             });
