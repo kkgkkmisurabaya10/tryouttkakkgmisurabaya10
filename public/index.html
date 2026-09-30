@@ -99,6 +99,8 @@
             <h5 class="fw-bold mb-0 text-white text-center">KKGMI SBY 10</h5>
             <small class="text-warning text-center fw-bold" id="user-role-disp"></small>
         </div>
+        
+        <!-- Menu Admin -->
         <ul class="list-unstyled components hidden" id="menu-admin">
             <li><a onclick="loadPage('admin-home')" class="nav-link active"><i class="fas fa-home me-3"></i>Dashboard</a></li>
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
@@ -108,6 +110,8 @@
             <li><a onclick="loadPage('admin-administrasi')" class="nav-link text-info"><i class="fas fa-print me-3"></i>Administrasi</a></li>
             <li><a onclick="handleResetCache()" class="nav-link text-warning"><i class="fas fa-bolt me-3"></i>Reset Cache</a></li>
         </ul>        
+        
+        <!-- Menu Guru -->
         <ul class="list-unstyled components hidden" id="menu-guru">
             <li><a onclick="loadPage('admin-home')" class="nav-link active"><i class="fas fa-home me-3"></i>Dashboard</a></li>
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
@@ -116,9 +120,11 @@
             <li><a onclick="loadPage('admin-administrasi')" class="nav-link text-info"><i class="fas fa-print me-3"></i>Administrasi</a></li>
         </ul>
 
+        <!-- Menu Siswa -->
         <ul class="list-unstyled components hidden" id="menu-siswa">
             <li><a onclick="loadPage('siswa-home')" class="nav-link active"><i class="fas fa-pencil-alt me-3"></i>Ujian Saya</a></li>
         </ul>
+        
         <div class="p-3 mt-auto border-top position-absolute bottom-0 w-100" style="border-color: rgba(255,255,255,0.1) !important;">
             <div class="mb-3 text-white small"><i class="fas fa-user-circle me-2"></i> <span id="u-name-disp" class="fw-bold">User</span></div>
             <button onclick="handleLogout()" class="btn btn-danger btn-sm w-100 fw-bold rounded-pill shadow-sm"><i class="fas fa-sign-out-alt me-2"></i> KELUAR</button>
@@ -523,7 +529,7 @@ function loadPage(page) {
 }
 
 function encodeImageFileAsURL(element) { let file = element.files[0]; let reader = new FileReader(); reader.onloadend = function() { $('#mu-foto-b64').val(reader.result); }; if(file) reader.readAsDataURL(file); }
-
+    
 function renderUsers(users) {
     window.allUsersData = users;
     const role = String(user.Role).trim().toLowerCase();
@@ -1373,6 +1379,7 @@ function simpanJamSesi() {
         if(res.status === 'success') {
             gData.jamSesi1 = s1; gData.jamSesi2 = s2; gData.jamSesi3 = s3;
             toast('success', 'Jam Sesi Berhasil Diperbarui!');
+            renderContent('admin-home'); 
         } else {
             Swal.fire('Error', res.msg, 'error');
         }
@@ -1414,9 +1421,9 @@ function renderContent(page) {
                         </div>
                         <div>
                             <select class="form-select border-success fw-bold text-success shadow-sm rounded-pill" onchange="updateSesiGlobal(this.value)">
-                                <option value="1" ${gData.sesiAktif === '1' ? 'selected' : ''}>Aktifkan Sesi 1</option>
-                                <option value="2" ${gData.sesiAktif === '2' ? 'selected' : ''}>Aktifkan Sesi 2</option>
-                                <option value="3" ${gData.sesiAktif === '3' ? 'selected' : ''}>Aktifkan Sesi 3</option>
+                                <option value="1" ${gData.sesiAktif === '1' ? 'selected' : ''}>Aktifkan Sesi 1 (${gData.jamSesi1 || '07.30 - 09.00'})</option>
+                                <option value="2" ${gData.sesiAktif === '2' ? 'selected' : ''}>Aktifkan Sesi 2 (${gData.jamSesi2 || '09.30 - 11.00'})</option>
+                                <option value="3" ${gData.sesiAktif === '3' ? 'selected' : ''}>Aktifkan Sesi 3 (${gData.jamSesi3 || '11.30 - 13.00'})</option>
                                 <option value="ALL" ${gData.sesiAktif === 'ALL' ? 'selected' : ''}>Buka Semua Sesi</option>
                             </select>
                         </div>
@@ -1510,7 +1517,6 @@ function renderContent(page) {
         const globalSesi = gData.sesiAktif || '1';
         const isSesiValid = (globalSesi === 'ALL' || String(mySesi) === String(globalSesi));
         
-        // Filter exams based on StartDate, EndDate and TargetKelas
         let validExams = [];
         if (gData.availableExams && gData.availableExams.length > 0) {
             const now = Date.now();
@@ -1519,7 +1525,6 @@ function renderContent(page) {
                 let tKelas = String(e.TargetKelas || '').trim().toLowerCase();
                 let uKelas = String(user.Kelas || '').trim().toLowerCase();
                 
-                // Allow if TargetKelas is 'all', 'semua', empty, or matches user class exactly, or if user class is inside TargetKelas (e.g. "6A, 6B")
                 if (tKelas === 'all' || tKelas === 'semua' || tKelas === '' || tKelas === uKelas || tKelas.includes(uKelas)) {
                     matchClass = true;
                 }
@@ -2085,9 +2090,15 @@ function runExam(qs, dur, isResume) {
     restoreAnswers(qs); jump(0);
     applyMathJax();
 
+    let durMins = parseFloat(dur);
+    if (isNaN(durMins) || durMins <= 0) durMins = 60; 
+
     let startTime = Date.now();
-    if(isResume) { const storedState = JSON.parse(localStorage.getItem('cbt_active_exam') || '{}'); if(storedState && storedState.start) startTime = storedState.start; }
-    const endTime = startTime + (dur * 60000);
+    if(isResume) { 
+        const storedState = JSON.parse(localStorage.getItem('cbt_active_exam') || '{}'); 
+        if(storedState && storedState.start) startTime = storedState.start; 
+    }
+    const endTime = startTime + (durMins * 60000);
     
     clearInterval(timerInt);
     timerInt = setInterval(() => {
@@ -2108,8 +2119,18 @@ function runExam(qs, dur, isResume) {
             }
         }
         else { 
-            let m = Math.floor(diff/60), s = diff%60; 
-            $('#timer-disp').text(`${m}:${s<10?'0':''}${s}`); 
+            let hours = Math.floor(diff / 3600);
+            let minutes = Math.floor((diff % 3600) / 60);
+            let seconds = diff % 60;
+            
+            let timeString = '';
+            if (hours > 0) {
+                timeString += (hours < 10 ? '0' : '') + hours + ':';
+            }
+            timeString += (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+            
+            $('#timer-disp').text(timeString); 
+            
             if(diff < 300) $('#timer-disp').parent().removeClass('border-danger text-danger bg-white').addClass('bg-danger text-white border-white shadow'); 
         }
     }, 1000);
