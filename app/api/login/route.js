@@ -6,8 +6,9 @@ export async function POST(req) {
   try {
     const { username, password, tglLahir } = await req.json();
 
+    // PERBAIKAN: CAST(Password AS TEXT) agar angka 1234 dari Excel tetap cocok dengan string '1234'
     const result = await turso.execute({
-      sql: "SELECT * FROM Users WHERE Username = ? AND Password = ?",
+      sql: "SELECT * FROM Users WHERE Username = ? AND CAST(Password AS TEXT) = ?",
       args: [username, password]
     });
 
@@ -16,8 +17,12 @@ export async function POST(req) {
       const role = String(user.Role).trim().toLowerCase();
 
       // Cek Tanggal Lahir HANYA jika yang login adalah siswa
-      if (role === 'siswa' && user.TglLahir !== tglLahir) {
-        return NextResponse.json({ status: 'error', msg: 'Tanggal Lahir salah untuk akun Anda!' });
+      if (role === 'siswa') {
+        const dbTgl = String(user.TglLahir || '').trim();
+        const inputTgl = String(tglLahir || '').trim();
+        if (dbTgl !== inputTgl) {
+          return NextResponse.json({ status: 'error', msg: 'Tanggal Lahir salah untuk akun Anda!' });
+        }
       }
 
       const token = jwt.sign(
