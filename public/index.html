@@ -100,7 +100,7 @@
             <small class="text-warning text-center fw-bold" id="user-role-disp"></small>
         </div>
         
-        <!-- Menu Admin (Monitoring Telah Dihapus) -->
+        <!-- Menu Admin -->
         <ul class="list-unstyled components hidden" id="menu-admin">
             <li><a onclick="loadPage('admin-home')" class="nav-link active"><i class="fas fa-home me-3"></i>Dashboard</a></li>
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
@@ -111,7 +111,7 @@
             <li><a onclick="handleResetCache()" class="nav-link text-warning"><i class="fas fa-bolt me-3"></i>Reset Cache</a></li>
         </ul>        
         
-        <!-- Menu Guru (Monitoring Telah Dihapus) -->
+        <!-- Menu Guru -->
         <ul class="list-unstyled components hidden" id="menu-guru">
             <li><a onclick="loadPage('admin-home')" class="nav-link active"><i class="fas fa-home me-3"></i>Dashboard</a></li>
             <li><a onclick="loadPage('admin-users')" class="nav-link"><i class="fas fa-users me-3"></i>Data Peserta</a></li>
@@ -407,7 +407,7 @@ window.google = {
 };
 
 let examSubmitting = false; let user = null; let gData = {}; let gAdminData = { exams: [], users: [] };
-let activeExamId = null; let timerInt, autosaveInterval;
+let activeExamId = null; let timerInt;
 let totalQ = 0; let currentQuestionsData = []; let currentQIdx = 0;
 let recapAllData = []; let recapDataStore = {};
 let violationCount = 0; const maxViolations = 3; let isExamFinished = false; let violationLock = false;
@@ -457,6 +457,7 @@ $(document).ready(() => {
 });
 
 function applyMathJax() { if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise().catch((err) => console.log('MathJax Error:', err)); } }
+
 function checkResumeExam() {
     const savedExam = localStorage.getItem('cbt_active_exam');
     if(savedExam) {
@@ -473,6 +474,7 @@ function checkResumeExam() {
         } catch(e) { localStorage.removeItem('cbt_active_exam'); }
     }
 }
+
 function toggleSidebar() { $('#sidebar').toggleClass('active'); $('#sidebar-overlay').toggleClass('active'); }
 function showLoad(s) { s ? $('#loader').removeClass('hidden') : $('#loader').addClass('hidden'); }
 function toast(icon, title) { Swal.mixin({toast: true, position: 'top-end', showConfirmButton: false, timer: 3000}).fire({icon: icon, title: title}); }
@@ -480,11 +482,12 @@ function handleLogout() {
     Swal.fire({ title: 'Keluar Aplikasi?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Keluar', cancelButtonText: 'Batal', confirmButtonColor: '#d33' }).then((r) => {
         if(r.isConfirmed) {
             localStorage.clear(); user = null;
-            clearInterval(timerInt); clearInterval(autosaveInterval);
+            clearInterval(timerInt);
             window.location.href = '/';
         }
     });
 }
+
 function initDash() {
     $('#view-dashboard').removeClass('hidden');
     $('#u-name-disp').text(user.Nama);
@@ -497,9 +500,11 @@ function initDash() {
     else if(role === 'admin') { $('#menu-admin').removeClass('hidden'); loadPage('admin-home'); } 
     else { Swal.fire('Akses Ditolak', 'Role akun Anda tidak dikenali sistem.', 'error'); }
 }
+
 function appRefresh() { const activeLink = $('.nav-link.active'); if (activeLink.length > 0) { const onclickAttr = activeLink.attr('onclick'); if(onclickAttr) { const match = onclickAttr.match(/'([^']+)'/); if(match) loadPage(match[1]); } } }
+
 function loadPage(page) {
-    clearInterval(timerInt); clearInterval(autosaveInterval); disableSecurity();
+    clearInterval(timerInt); disableSecurity();
     $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); $('body').removeClass('exam-mode');
     $('#page-title').text(page.replace('-', ' ').toUpperCase());
     $('.nav-link').removeClass('active'); $(`a[onclick="loadPage('${page}')"]`).addClass('active');
@@ -646,6 +651,53 @@ function renderUserRows(data) {
     $('#users-tbody').html(h);
     $('#check-all-users').prop('checked', false);
     if(isAdmin) toggleBulkDeleteUsersBtn();
+}
+
+function handleUploadUsersExcel(e) {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, {type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd'});
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(firstSheet, {raw: false});
+        
+        let formattedData = json.map(row => {
+            return {
+                id: 'S-' + Date.now() + Math.floor(Math.random() * 10000),
+                nama: row['Nama'] || '',
+                username: String(row['Username'] || '').trim(),
+                password: String(row['Password'] || '').trim(),
+                role: String(row['Role'] || 'siswa').toLowerCase(),
+                sekolah: row['Sekolah'] || '',
+                kelas: String(row['Kelas'] || ''),
+                sesi: String(row['Sesi'] || '1'),
+                tglLahir: row['TglLahir'] || ''
+            };
+        }).filter(u => u.username !== '');
+        
+        if(formattedData.length === 0) return Swal.fire('Error', 'Format data tidak valid.', 'error');
+        
+        Swal.fire({ title: `Upload ${formattedData.length} Peserta?`, icon: 'question', showCancelButton: true }).then(async r => {
+            if(r.isConfirmed) {
+                showLoad(true);
+                let successCount = 0; let failCount = 0;
+                for(let u of formattedData) {
+                    await new Promise(resolve => {
+                        google.script.run
+                        .withSuccessHandler((res) => { if(res && res.status==='success') successCount++; else failCount++; resolve(); })
+                        .withFailureHandler(() => { failCount++; resolve(); })
+                        .adminManageUser('save', u);
+                    });
+                }
+                showLoad(false);
+                Swal.fire('Selesai', `Berhasil upload ${successCount} peserta. ${failCount > 0 ? `(${failCount} gagal)` : ''}`, 'success');
+                loadPage('admin-users');
+            }
+        });
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
 }
 
 async function handleBulkPhotoUpload(event) {
@@ -1242,6 +1294,7 @@ function renderAdministrasi() {
     let optKelas = `<option value="ALL">Semua Kelas</option>` + uniqueKelas.map(k => `<option value="${k}">${k}</option>`).join('');
     let optUjian = `<option value="">-- Pilih Ujian --</option>` + gAdminData.exams.map(e => `<option value="${e.ExamID}">${e.Judul} (${e.Mapel})</option>`).join('');
     
+    // Opsi Filter Sesi
     let optSesi = `<option value="ALL">Semua Sesi</option><option value="1">Sesi 1</option><option value="2">Sesi 2</option><option value="3">Sesi 3</option>`;
 
     let h = `
@@ -2332,7 +2385,7 @@ function processSubmission(retryCount = 0) {
     let ans = [];
     try {
         $('.q-slide').each(function(idx) {
-            const qid = $(this).data('qid'); const t = $(this).data('type'); let v = null;
+            const qid = $(this).data('qid'); const t =$(this).data('type'); let v = null;
             if (t.includes('PG') && t !== 'PGKK') {
                 if (t === 'PGK') { v = []; $(this).find('input:checked').each(function() { v.push(decodeURIComponent($(this).val())) }); }
                 else { const checked = $(this).find('input:checked').val(); if(checked) v = decodeURIComponent(checked); }
