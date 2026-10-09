@@ -73,6 +73,16 @@ export default function Page() {
       <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+      
+      {/* PERBAIKAN: Meletakkan CSS Global di sini dengan benar tanpa syntax yang merusak JSX */}
+      <style>{`
+        @keyframes heartbeat {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
+        .heartbeat-animation { animation: heartbeat 2s infinite ease-in-out; }
+      `}</style>
 
       <div style={{
         fontFamily: "'Poppins', sans-serif",
@@ -108,78 +118,58 @@ export default function Page() {
               </div>
 
               {/* --- KOTAK JADWAL & SESI --- */}
-<div className="bg-white text-dark p-4 rounded-4 shadow-sm" style={{ opacity: 0.95 }}>
-  <div className="d-flex justify-content-between align-items-center mb-3">
-    <h5 className="fw-bold text-success m-0">
-      <i className="fas fa-calendar-alt me-2"></i>Jadwal Pelaksanaan
-    </h5>
-    <span className="badge bg-danger px-3 py-2 fs-6 rounded-pill shadow-sm heartbeat-animation">
-      Sesi Aktif: {activeSession === 'ALL' ? 'Semua Sesi' : `Sesi ${activeSession}`}
-    </span>
-  </div>
-  
-  {/* Semua kolom Tryout dibungkus dalam satu row di sini */}
-  <div className="row g-3 mb-3">
-    
-    {/* Tryout 1 */}
-    <div className="col-md-6">
-      <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
-        <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
-          Tryout 1 <br/>
-          <small className="text-muted fw-normal" style={{fontSize: '12px'}}>17 - 20 November 2026</small>
-        </h6>
-        <div className="small text-muted" style={{ lineHeight: '1.6' }}>
-          <div className="mb-2">
-            <strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>17 - 18 November 2026
-          </div>
-          <div>
-            <strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>19 - 20 November 2026
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    {/* Tryout 2 */}
-    <div className="col-md-6">
-      <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
-        <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
-          Tryout 2 <br/>
-          <small className="text-muted fw-normal" style={{fontSize: '12px'}}>25 - 28 Jan 2027</small>
-        </h6>
-        <div className="small text-muted" style={{ lineHeight: '1.6' }}>
-          <div className="mb-2">
-            <strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>25 - 26 Januari 2027
-          </div>
-          <div>
-            <strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>27 - 28 Januari 2027
-          </div>
-        </div>
-      </div>
-    </div>
+              <div className="bg-white text-dark p-4 rounded-4 shadow-sm" style={{ opacity: 0.95 }}>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="fw-bold text-success m-0"><i className="fas fa-calendar-alt me-2"></i>Jadwal Pelaksanaan</h5>
+                    <span className="badge bg-danger px-3 py-2 fs-6 rounded-pill shadow-sm heartbeat-animation">
+                        Sesi Aktif: {activeSession === 'ALL' ? 'Semua Sesi' : `Sesi ${activeSession}`}
+                    </span>
+                </div>
+                
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
+                      <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
+                        Tryout 1 <br/>
+                        <small className="text-muted fw-normal" style={{fontSize: '12px'}}>17 - 20 November 2026</small>
+                      </h6>
+                      <div className="small text-muted" style={{ lineHeight: '1.6' }}>
+                        <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>17 - 18 November 2026</div>
+                        <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>19 - 20 November 2026</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="col-md-6">
+                    <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
+                      <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
+                        Tryout 2 <br/>
+                        <small className="text-muted fw-normal" style={{fontSize: '12px'}}>25 - 28 Jan 2027</small>
+                      </h6>
+                      <div className="small text-muted" style={{ lineHeight: '1.6' }}>
+                        <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>25 - 26 Januari 2027</div>
+                        <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>27 - 28 Januari 2027</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-    {/* Tryout 3 */}
-    <div className="col-md-6">
-      <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
-        <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
-          Tryout 3 <br/>
-          <small className="text-muted fw-normal" style={{fontSize: '12px'}}>5 - 8 April 2027</small>
-        </h6>
-        <div className="small text-muted" style={{ lineHeight: '1.6' }}>
-          <div className="mb-2">
-            <strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>5 - 6 April 2027
-          </div>
-          <div>
-            <strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>7 - 8 April 2027
-          </div>
-        </div>
-      </div>
-    </div>
-    
-  </div>
-</div>
+                <div className="col-md-6">
+                    <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
+                      <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
+                        Tryout 3 <br/>
+                        <small className="text-muted fw-normal" style={{fontSize: '12px'}}>5-8 April 2027</small>
+                      </h6>
+                      <div className="small text-muted" style={{ lineHeight: '1.6' }}>
+                        <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>5 - 6 April 2027</div>
+                        <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>7 - 8 April 2027</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Blok Sesi (Dinamis dari Database) */}
-                <div className="p-3 rounded-3 border" style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                <div className="p-3 rounded-3 border mt-3" style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
                   <div className="fw-bold text-success mb-2 small"><i className="fas fa-clock me-1"></i> Waktu Sesi (Berlaku Semua Gelombang):</div>
                   <div className="d-flex flex-wrap gap-2 small">
                     <span className={`badge border px-3 py-2 shadow-sm ${activeSession === '1' ? 'bg-success text-white border-success' : 'bg-white text-success border-success'}`} style={{ fontSize: '13px' }}>Sesi 1: {jamSesi1}</span>
@@ -188,7 +178,7 @@ export default function Page() {
                   </div>
                 </div>
               </div>
-            </div>
+            
 
             {/* --- BAGIAN KANAN (LOGIN) --- */}
             <div className="col-lg-5">
@@ -274,14 +264,6 @@ export default function Page() {
             
           </div>
         </div>
-        <style dangerouslySetInnerHTML={{__html: `
-          @keyframes heartbeat {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-          }
-          .heartbeat-animation { animation: heartbeat 2s infinite ease-in-out; }
-        `}} />
       </div>
     </>
   );
