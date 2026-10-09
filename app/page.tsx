@@ -121,11 +121,11 @@ export default function Page() {
                     <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
                       <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
                         Tryout 1 <br/>
-                        <small className="text-muted fw-normal" style={{fontSize: '12px'}}>14 - 17 Des 2026</small>
+                        <small className="text-muted fw-normal" style={{fontSize: '12px'}}>17 - 20 November 2026</small>
                       </h6>
                       <div className="small text-muted" style={{ lineHeight: '1.6' }}>
-                        <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>14 - 15 Desember 2026</div>
-                        <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>16 - 17 Desember 2026</div>
+                        <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>17 - 18 November 2026</div>
+                        <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>19 - 20 November 2026</div>
                       </div>
                     </div>
                   </div>
@@ -139,6 +139,20 @@ export default function Page() {
                       <div className="small text-muted" style={{ lineHeight: '1.6' }}>
                         <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>25 - 26 Januari 2027</div>
                         <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>27 - 28 Januari 2027</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-md-6">
+                    <div className="p-3 bg-light rounded-3 border h-100 shadow-sm">
+                      <h6 className="fw-bold text-primary mb-2 border-bottom pb-2">
+                        Tryout 3 <br/>
+                        <small className="text-muted fw-normal" style={{fontSize: '12px'}}>5-8 April 2027</small>
+                      </h6>
+                      <div className="small text-muted" style={{ lineHeight: '1.6' }}>
+                        <div className="mb-2"><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 1:</strong><br/>5 - 6 April 2027</div>
+                        <div><strong className="text-dark"><i className="fas fa-angle-right text-success me-1"></i>Gelombang 2:</strong><br/>7 - 8 April 2027</div>
                       </div>
                     </div>
                   </div>
