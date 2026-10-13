@@ -354,19 +354,6 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalKoreksi" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-info text-white"><h5 class="modal-title fw-bold"><i class="fas fa-edit me-2"></i>Koreksi Jawaban Siswa</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body bg-light" id="kor-body"></div>
-            <div class="modal-footer bg-white border-top">
-                <button class="btn btn-secondary px-4 rounded-pill" data-bs-dismiss="modal">Tutup</button>
-                <button class="btn btn-info text-white px-4 shadow-sm rounded-pill fw-bold" id="btn-save-kor" onclick="saveKoreksi()">Simpan Nilai Baru</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -418,6 +405,7 @@ let totalSurveyQ = 0;
 // AUDIO CONTEXT UNTUK PERINGATAN PELANGGARAN
 let audioCtx = null;
 let beepInterval = null;
+let activeOscillators = []; // Merekam oscillator yang sedang menyala agar bisa dihentikan seketika
 
 function initAudio() {
     if (!audioCtx) {
@@ -433,6 +421,11 @@ function stopBeep() {
         clearInterval(beepInterval);
         beepInterval = null;
     }
+    // Hentikan seketika bunyi yang sedang menyala di memori
+    activeOscillators.forEach(osc => {
+        try { osc.stop(); } catch(e) {}
+    });
+    activeOscillators = [];
 }
 
 function beep(duration, frequency, type) {
@@ -442,12 +435,25 @@ function beep(duration, frequency, type) {
         const gainNode = audioCtx.createGain();
         oscillator.type = type || 'square';
         oscillator.frequency.value = frequency;
-        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration / 1000);
+        
+        // Suara dikeraskan (Gain 2.0)
+        gainNode.gain.setValueAtTime(2.0, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration / 1000);
+        
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
+        
         oscillator.start();
         oscillator.stop(audioCtx.currentTime + duration / 1000);
+        
+        activeOscillators.push(oscillator);
+        
+        // Pembersihan otomatis dari memori array
+        setTimeout(() => {
+            const idx = activeOscillators.indexOf(oscillator);
+            if(idx > -1) activeOscillators.splice(idx, 1);
+        }, duration);
+        
     } catch(e) {}
 }
 
@@ -457,8 +463,8 @@ function playBeepPattern(type) {
 
     if (type === 1) {
         // Pelanggaran 1: 1 kali keras berulang
-        beepInterval = setInterval(() => beep(400, 800, 'square'), 1000);
-        beep(400, 800, 'square'); 
+        beepInterval = setInterval(() => beep(600, 750, 'square'), 1200);
+        beep(600, 750, 'square'); 
     } else if (type === 2) {
         // Pelanggaran 2: 2 kali keras berulang
         beepInterval = setInterval(() => {
@@ -468,7 +474,7 @@ function playBeepPattern(type) {
         beep(250, 800, 'square');
         setTimeout(() => beep(250, 800, 'square'), 350);
     } else if (type >= 3) {
-        // Pelanggaran 3: Sirine panjang berulang (tidak bisa dihentikan kecuali tersubmit)
+        // Pelanggaran 3: Sirine panjang berulang
         beepInterval = setInterval(() => {
             beep(800, 600, 'sawtooth');
             setTimeout(() => beep(800, 900, 'sawtooth'), 800);
@@ -521,6 +527,7 @@ $(document).ready(() => {
 });
 
 function applyMathJax() { if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise().catch((err) => console.log('MathJax Error:', err)); } }
+
 function checkResumeExam() {
     const savedExam = localStorage.getItem('cbt_active_exam');
     if(savedExam) {
@@ -537,6 +544,7 @@ function checkResumeExam() {
         } catch(e) { localStorage.removeItem('cbt_active_exam'); }
     }
 }
+
 function toggleSidebar() { $('#sidebar').toggleClass('active'); $('#sidebar-overlay').toggleClass('active'); }
 function showLoad(s) { s ? $('#loader').removeClass('hidden') : $('#loader').addClass('hidden'); }
 function toast(icon, title) { Swal.mixin({toast: true, position: 'top-end', showConfirmButton: false, timer: 3000}).fire({icon: icon, title: title}); }
@@ -544,12 +552,13 @@ function handleLogout() {
     Swal.fire({ title: 'Keluar Aplikasi?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Keluar', cancelButtonText: 'Batal', confirmButtonColor: '#d33' }).then((r) => {
         if(r.isConfirmed) {
             localStorage.clear(); user = null;
-            stopBeep();
-            clearInterval(timerInt); clearInterval(autosaveInterval);
+            stopBeep(); // Pastikan suara mati saat logout
+            clearInterval(timerInt);
             window.location.href = '/';
         }
     });
 }
+
 function initDash() {
     $('#view-dashboard').removeClass('hidden');
     $('#u-name-disp').text(user.Nama);
@@ -562,9 +571,11 @@ function initDash() {
     else if(role === 'admin') { $('#menu-admin').removeClass('hidden'); loadPage('admin-home'); } 
     else { Swal.fire('Akses Ditolak', 'Role akun Anda tidak dikenali sistem.', 'error'); }
 }
+
 function appRefresh() { const activeLink = $('.nav-link.active'); if (activeLink.length > 0) { const onclickAttr = activeLink.attr('onclick'); if(onclickAttr) { const match = onclickAttr.match(/'([^']+)'/); if(match) loadPage(match[1]); } } }
+
 function loadPage(page) {
-    clearInterval(timerInt); clearInterval(autosaveInterval); disableSecurity(); stopBeep();
+    clearInterval(timerInt); disableSecurity(); stopBeep(); // Pastikan suara mati saat pindah menu
     $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); $('body').removeClass('exam-mode');
     $('#page-title').text(page.replace('-', ' ').toUpperCase());
     $('.nav-link').removeClass('active'); $(`a[onclick="loadPage('${page}')"]`).addClass('active');
@@ -1668,7 +1679,7 @@ function renderContent(page) {
                     actionButtons = `<div class="alert alert-light small m-0 p-2 text-center w-100 text-muted border rounded-pill"><i class="fas fa-lock me-1"></i>Akses Download Dikunci Admin</div>`;
                 }
             }
-            h += `<div class="col-md-6 col-xl-4 ujian-card" data-mapel="${e.Mapel}" data-kelas="${e.TargetKelas}"><div class="card h-100 shadow-sm border-0 rounded-4 overflow-hidden"><div class="card-body p-4"><div class="d-flex justify-content-between mb-3"><span class="badge bg-primary px-3 py-2 rounded-pill shadow-sm">${e.Mapel}</span><span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-users me-1"></i> ${e.TargetKelas}</span></div><h5 class="fw-bold text-dark mb-1 line-clamp-2">${e.Judul}</h5><p class="small text-muted mb-4"><i class="fas fa-clock me-1"></i> ${e.Durasi} Menit \vert{}${tokenBadge}</p><div class="d-flex gap-2 mt-auto">${actionButtons}</div></div></div></div>`;
+            h += `<div class="col-md-6 col-xl-4 ujian-card" data-mapel="${e.Mapel}" data-kelas="${e.TargetKelas}"><div class="card h-100 shadow-sm border-0 rounded-4 overflow-hidden"><div class="card-body p-4"><div class="d-flex justify-content-between mb-3"><span class="badge bg-primary px-3 py-2 rounded-pill shadow-sm">${e.Mapel}</span><span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-users me-1"></i> ${e.TargetKelas}</span></div><h5 class="fw-bold text-dark mb-1 line-clamp-2">${e.Judul}</h5><p class="small text-muted mb-4"><i class="fas fa-clock me-1"></i> ${e.Durasi} Menit | ${tokenBadge}</p><div class="d-flex gap-2 mt-auto">${actionButtons}</div></div></div></div>`;
         });
         h += '</div>';
     }
@@ -1721,7 +1732,9 @@ function renderContent(page) {
             });
         }
 
-        h = `<div class="card mb-4 border-0 shadow-sm rounded-4 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f5132, #d4af37);"><div class="card-body p-4"><div class="d-flex align-items-center"><img src="${user.Foto || 'https://via.placeholder.com/60'}" class="rounded-circle me-4 shadow" width="70" height="70" style="object-fit:cover; border:3px solid #fff;"><div class="text-start"><h4 class="fw-bold m-0 text-white">Assalamu'alaikum, ${user.Nama}</h4><p class="m-0 text-white-50"><i class="fas fa-school me-1"></i> ${user.Sekolah} \vert{} Kelas${user.Kelas} | Sesi ${mySesi}</p></div></div></div></div>${!isSesiValid ? `<div class="alert alert-danger shadow-sm rounded-4 fw-bold mb-4"><i class="fas fa-exclamation-triangle me-2"></i> Perhatian: Sesi Anda (Sesi ${mySesi}) belum aktif saat ini. Anda belum bisa memulai ujian!</div>` : ''}
+        h = `<div class="card mb-4 border-0 shadow-sm rounded-4 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f5132, #d4af37);"><div class="card-body p-4"><div class="d-flex align-items-center"><img src="${user.Foto || 'https://via.placeholder.com/60'}" class="rounded-circle me-4 shadow" width="70" height="70" style="object-fit:cover; border:3px solid #fff;"><div class="text-start"><h4 class="fw-bold m-0 text-white">Assalamu'alaikum, ${user.Nama}</h4><p class="m-0 text-white-50"><i class="fas fa-school me-1"></i> ${user.Sekolah} | Kelas ${user.Kelas} | Sesi ${mySesi}</p></div></div></div></div>
+        
+        ${!isSesiValid ? `<div class="alert alert-danger shadow-sm rounded-4 fw-bold mb-4"><i class="fas fa-exclamation-triangle me-2"></i> Perhatian: Sesi Anda (Sesi ${mySesi}) belum aktif saat ini. Anda belum bisa memulai ujian!</div>` : ''}
         
         <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary"><i class="fas fa-edit me-2"></i>Ujian Aktif Saat Ini</h5><div class="row g-4 mb-5">`;
         
@@ -1754,8 +1767,6 @@ function renderContent(page) {
                     actions += `<button class="btn btn-sm btn-success me-2 mt-1 rounded-pill px-3 shadow-sm" onclick="dlSiswaHasil('${r.ResultID}')"><i class="fas fa-file-pdf me-1"></i> Hasil PDF</button>`;
                 }
                 
-                actions += `<button class="btn btn-sm btn-outline-danger mt-1 rounded-pill px-3 shadow-sm" onclick="laporTrobel('${r.ResultID}')"><i class="fas fa-exclamation-triangle me-1"></i> Lapor Trobel</button>`;
-
                 h += `<tr><td class="text-muted small">${r.WaktuSubmit}</td><td><div class="fw-bold text-dark">${r.Judul}</div></td><td>${displayNilai}</td><td><div class="d-flex flex-wrap align-items-center"><span class="badge bg-primary px-3 py-2 rounded-pill me-3 shadow-sm"><i class="fas fa-check me-1"></i> Selesai TKA</span> ${actions}</div></td></tr>`; 
             });
             h += `</tbody></table></div>`;
@@ -2068,6 +2079,7 @@ function downloadQuestionTemplate() {
     XLSX.writeFile(wb, "Template_Upload_Soal_CBT.xlsx");
 }
 
+
 function toggleEditQ(uid) { 
     const form = $(`#form-${uid}`); 
     if (form.hasClass('hidden')) { 
@@ -2282,10 +2294,10 @@ function triggerViolation(msg) {
     
     if (violationCount >= maxViolations) {
         isExamFinished = true;
-        playBeepPattern(3); // Pelanggaran ketiga (Maksimal)
+        playBeepPattern(3); // Sirine Panjang
         submitExamButton(true); 
     } else {
-        playBeepPattern(violationCount); // Pelanggaran pertama atau kedua
+        playBeepPattern(violationCount); // Beep ke 1 atau 2
         Swal.fire({ 
             icon: 'warning', 
             title: 'PELANGGARAN DETECTED!', 
@@ -2483,6 +2495,7 @@ function processSubmission(retryCount = 0) {
             google.script.run
             .withSuccessHandler(surveyRes => {
                 showLoad(false);
+                stopBeep(); // Suara Pelanggaran 3 Berhenti Disini Saat Lanjut Survey
                 if(surveyRes.status === 'success' && surveyRes.data) {
                     $('body').removeClass('exam-mode');$('#view-exam').addClass('hidden');
                     $('#view-countdown').removeClass('hidden');
@@ -2499,17 +2512,24 @@ function processSubmission(retryCount = 0) {
             })
             .withFailureHandler(err => {
                 showLoad(false);
+                stopBeep(); // Suara Pelanggaran 3 Berhenti Disini Bila Gagal Memuat Survey
                 Swal.fire('Selesai', 'Ujian telah terkirim.', 'success').then(() => {
                     $('body').removeClass('exam-mode'); $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home');
                 });
             })
             .checkActiveSurvey(activeExamId);
             
-        } else { Swal.fire('Gagal', res.msg || 'Terjadi kesalahan sistem.', 'error'); }
+        } else { 
+            stopBeep();
+            Swal.fire('Gagal', res.msg || 'Terjadi kesalahan sistem.', 'error'); 
+        }
     })
     .withFailureHandler((err) => {
         if (retryCount < 3) { setTimeout(() => processSubmission(retryCount + 1), 3000); } 
-        else { examSubmitting = false; btn.prop('disabled', false).html(originalText); Swal.fire('Koneksi Terputus', 'Gagal menghubungi server.', 'error'); }
+        else { 
+            stopBeep(); // Hentikan bila koneksi putus
+            examSubmitting = false; btn.prop('disabled', false).html(originalText); Swal.fire('Koneksi Terputus', 'Gagal menghubungi server.', 'error'); 
+        }
     }).submitExam(user.ID, activeExamId, ans, violationCount, localTime);
 }
 
