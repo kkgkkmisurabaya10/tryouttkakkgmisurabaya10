@@ -407,13 +407,77 @@ window.google = {
 };
 
 let examSubmitting = false; let user = null; let gData = {}; let gAdminData = { exams: [], users: [] };
-let activeExamId = null; let timerInt;
+let activeExamId = null; let timerInt, autosaveInterval;
 let totalQ = 0; let currentQuestionsData = []; let currentQIdx = 0;
 let recapAllData = []; let recapDataStore = {};
 let violationCount = 0; const maxViolations = 3; let isExamFinished = false; let violationLock = false;
 let isSurveyMode = false;
 let currentSurveyIdx = 0;
 let totalSurveyQ = 0;
+
+// AUDIO CONTEXT UNTUK PERINGATAN PELANGGARAN
+let audioCtx = null;
+let beepInterval = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+function stopBeep() {
+    if (beepInterval) {
+        clearInterval(beepInterval);
+        beepInterval = null;
+    }
+}
+
+function beep(duration, frequency, type) {
+    if (!audioCtx) return;
+    try {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.type = type || 'square';
+        oscillator.frequency.value = frequency;
+        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration / 1000);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + duration / 1000);
+    } catch(e) {}
+}
+
+function playBeepPattern(type) {
+    initAudio();
+    stopBeep(); 
+
+    if (type === 1) {
+        // Pelanggaran 1: 1 kali keras berulang
+        beepInterval = setInterval(() => beep(400, 800, 'square'), 1000);
+        beep(400, 800, 'square'); 
+    } else if (type === 2) {
+        // Pelanggaran 2: 2 kali keras berulang
+        beepInterval = setInterval(() => {
+            beep(250, 800, 'square');
+            setTimeout(() => beep(250, 800, 'square'), 350);
+        }, 1200);
+        beep(250, 800, 'square');
+        setTimeout(() => beep(250, 800, 'square'), 350);
+    } else if (type >= 3) {
+        // Pelanggaran 3: Sirine panjang berulang (tidak bisa dihentikan kecuali tersubmit)
+        beepInterval = setInterval(() => {
+            beep(800, 600, 'sawtooth');
+            setTimeout(() => beep(800, 900, 'sawtooth'), 800);
+        }, 1600);
+        beep(800, 600, 'sawtooth');
+        setTimeout(() => beep(800, 900, 'sawtooth'), 800);
+    }
+}
+
 
 const MathButton = function (context) {
     const ui = $.summernote.ui;
@@ -457,7 +521,6 @@ $(document).ready(() => {
 });
 
 function applyMathJax() { if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise().catch((err) => console.log('MathJax Error:', err)); } }
-
 function checkResumeExam() {
     const savedExam = localStorage.getItem('cbt_active_exam');
     if(savedExam) {
@@ -474,7 +537,6 @@ function checkResumeExam() {
         } catch(e) { localStorage.removeItem('cbt_active_exam'); }
     }
 }
-
 function toggleSidebar() { $('#sidebar').toggleClass('active'); $('#sidebar-overlay').toggleClass('active'); }
 function showLoad(s) { s ? $('#loader').removeClass('hidden') : $('#loader').addClass('hidden'); }
 function toast(icon, title) { Swal.mixin({toast: true, position: 'top-end', showConfirmButton: false, timer: 3000}).fire({icon: icon, title: title}); }
@@ -482,12 +544,12 @@ function handleLogout() {
     Swal.fire({ title: 'Keluar Aplikasi?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Keluar', cancelButtonText: 'Batal', confirmButtonColor: '#d33' }).then((r) => {
         if(r.isConfirmed) {
             localStorage.clear(); user = null;
-            clearInterval(timerInt);
+            stopBeep();
+            clearInterval(timerInt); clearInterval(autosaveInterval);
             window.location.href = '/';
         }
     });
 }
-
 function initDash() {
     $('#view-dashboard').removeClass('hidden');
     $('#u-name-disp').text(user.Nama);
@@ -500,11 +562,9 @@ function initDash() {
     else if(role === 'admin') { $('#menu-admin').removeClass('hidden'); loadPage('admin-home'); } 
     else { Swal.fire('Akses Ditolak', 'Role akun Anda tidak dikenali sistem.', 'error'); }
 }
-
 function appRefresh() { const activeLink = $('.nav-link.active'); if (activeLink.length > 0) { const onclickAttr = activeLink.attr('onclick'); if(onclickAttr) { const match = onclickAttr.match(/'([^']+)'/); if(match) loadPage(match[1]); } } }
-
 function loadPage(page) {
-    clearInterval(timerInt); disableSecurity();
+    clearInterval(timerInt); clearInterval(autosaveInterval); disableSecurity(); stopBeep();
     $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); $('body').removeClass('exam-mode');
     $('#page-title').text(page.replace('-', ' ').toUpperCase());
     $('.nav-link').removeClass('active'); $(`a[onclick="loadPage('${page}')"]`).addClass('active');
@@ -1608,7 +1668,7 @@ function renderContent(page) {
                     actionButtons = `<div class="alert alert-light small m-0 p-2 text-center w-100 text-muted border rounded-pill"><i class="fas fa-lock me-1"></i>Akses Download Dikunci Admin</div>`;
                 }
             }
-            h += `<div class="col-md-6 col-xl-4 ujian-card" data-mapel="${e.Mapel}" data-kelas="${e.TargetKelas}"><div class="card h-100 shadow-sm border-0 rounded-4 overflow-hidden"><div class="card-body p-4"><div class="d-flex justify-content-between mb-3"><span class="badge bg-primary px-3 py-2 rounded-pill shadow-sm">${e.Mapel}</span><span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-users me-1"></i> ${e.TargetKelas}</span></div><h5 class="fw-bold text-dark mb-1 line-clamp-2">${e.Judul}</h5><p class="small text-muted mb-4"><i class="fas fa-clock me-1"></i> ${e.Durasi} Menit | ${tokenBadge}</p><div class="d-flex gap-2 mt-auto">${actionButtons}</div></div></div></div>`;
+            h += `<div class="col-md-6 col-xl-4 ujian-card" data-mapel="${e.Mapel}" data-kelas="${e.TargetKelas}"><div class="card h-100 shadow-sm border-0 rounded-4 overflow-hidden"><div class="card-body p-4"><div class="d-flex justify-content-between mb-3"><span class="badge bg-primary px-3 py-2 rounded-pill shadow-sm">${e.Mapel}</span><span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-users me-1"></i> ${e.TargetKelas}</span></div><h5 class="fw-bold text-dark mb-1 line-clamp-2">${e.Judul}</h5><p class="small text-muted mb-4"><i class="fas fa-clock me-1"></i> ${e.Durasi} Menit \vert{}${tokenBadge}</p><div class="d-flex gap-2 mt-auto">${actionButtons}</div></div></div></div>`;
         });
         h += '</div>';
     }
@@ -1661,9 +1721,7 @@ function renderContent(page) {
             });
         }
 
-        h = `<div class="card mb-4 border-0 shadow-sm rounded-4 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f5132, #d4af37);"><div class="card-body p-4"><div class="d-flex align-items-center"><img src="${user.Foto || 'https://via.placeholder.com/60'}" class="rounded-circle me-4 shadow" width="70" height="70" style="object-fit:cover; border:3px solid #fff;"><div class="text-start"><h4 class="fw-bold m-0 text-white">Assalamu'alaikum, ${user.Nama}</h4><p class="m-0 text-white-50"><i class="fas fa-school me-1"></i> ${user.Sekolah} | Kelas ${user.Kelas} | Sesi ${mySesi}</p></div></div></div></div>
-        
-        ${!isSesiValid ? `<div class="alert alert-danger shadow-sm rounded-4 fw-bold mb-4"><i class="fas fa-exclamation-triangle me-2"></i> Perhatian: Sesi Anda (Sesi ${mySesi}) belum aktif saat ini. Anda belum bisa memulai ujian!</div>` : ''}
+        h = `<div class="card mb-4 border-0 shadow-sm rounded-4 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f5132, #d4af37);"><div class="card-body p-4"><div class="d-flex align-items-center"><img src="${user.Foto || 'https://via.placeholder.com/60'}" class="rounded-circle me-4 shadow" width="70" height="70" style="object-fit:cover; border:3px solid #fff;"><div class="text-start"><h4 class="fw-bold m-0 text-white">Assalamu'alaikum, ${user.Nama}</h4><p class="m-0 text-white-50"><i class="fas fa-school me-1"></i> ${user.Sekolah} \vert{} Kelas${user.Kelas} | Sesi ${mySesi}</p></div></div></div></div>${!isSesiValid ? `<div class="alert alert-danger shadow-sm rounded-4 fw-bold mb-4"><i class="fas fa-exclamation-triangle me-2"></i> Perhatian: Sesi Anda (Sesi ${mySesi}) belum aktif saat ini. Anda belum bisa memulai ujian!</div>` : ''}
         
         <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary"><i class="fas fa-edit me-2"></i>Ujian Aktif Saat Ini</h5><div class="row g-4 mb-5">`;
         
@@ -2010,7 +2068,6 @@ function downloadQuestionTemplate() {
     XLSX.writeFile(wb, "Template_Upload_Soal_CBT.xlsx");
 }
 
-
 function toggleEditQ(uid) { 
     const form = $(`#form-${uid}`); 
     if (form.hasClass('hidden')) { 
@@ -2184,6 +2241,7 @@ function startExam(eid) {
         }
     }).then(r => {
         if(r.isConfirmed) {
+            initAudio(); // Inisialisasi Audio saat ada interaksi user pertama kali
             if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch((err) => {}); }
             showLoad(true);
             google.script.run
@@ -2217,17 +2275,32 @@ function disableSecurity() { document.removeEventListener("visibilitychange", ha
 function handleVisibilityChange() { if (!isExamFinished && document.hidden) triggerViolation("Anda keluar dari tab ujian!"); }
 function handleWindowBlur() { if (!isExamFinished) triggerViolation("Anda meninggalkan halaman ujian!"); }
 function handleFullscreenChange() { if (!isExamFinished && !document.fullscreenElement) { triggerViolation("Anda keluar dari mode fullscreen!"); try{document.documentElement.requestFullscreen().catch(()=>{});}catch(e){} } }
+
 function triggerViolation(msg) {
     if(violationLock || isExamFinished) return;
     violationLock = true; violationCount++;
+    
     if (violationCount >= maxViolations) {
         isExamFinished = true;
+        playBeepPattern(3); // Pelanggaran ketiga (Maksimal)
         submitExamButton(true); 
     } else {
-        Swal.fire({ icon: 'warning', title: 'PELANGGARAN DETECTED!', html: `<b>${msg}</b><br><br>Peringatan: <b>(${violationCount}/${maxViolations})</b><br>Jangan diulangi atau ujian akan dihentikan paksa!`, confirmButtonText: 'SAYA MENGERTI', confirmButtonColor: '#d33', allowOutsideClick: false
-        }).then(() => { violationLock = false; try{document.documentElement.requestFullscreen().catch(()=>{});}catch(e){} });
+        playBeepPattern(violationCount); // Pelanggaran pertama atau kedua
+        Swal.fire({ 
+            icon: 'warning', 
+            title: 'PELANGGARAN DETECTED!', 
+            html: `<b>${msg}</b><br><br>Peringatan: <b>(${violationCount}/${maxViolations})</b><br>Jangan diulangi atau ujian akan dihentikan paksa!`, 
+            confirmButtonText: 'SAYA MENGERTI', 
+            confirmButtonColor: '#d33', 
+            allowOutsideClick: false
+        }).then(() => { 
+            stopBeep(); 
+            violationLock = false; 
+            try{document.documentElement.requestFullscreen().catch(()=>{});}catch(e){} 
+        });
     }
 }
+
 function changeFontSize(size) { $('.q-content').css('font-size', size + 'px'); }
 
 function runExam(qs, dur, isResume) {
