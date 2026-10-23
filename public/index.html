@@ -1378,7 +1378,7 @@ function renderAdministrasi() {
                     <p class="small text-muted mb-4">Cetak kartu berfoto untuk akses CBT Siswa.</p>
                     <select id="adm-kls-kartu" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optKelas}</select>
                     <select id="adm-sesi-kartu" class="form-select mb-3 bg-light border-0 rounded-pill px-3">${optSesi}</select>
-                    <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="printKartuLogin()"><i class="fas fa-print me-1"></i> Cetak Kartu</button>
+                    <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="()"><i class="fas fa-print me-1"></i> Cetak Kartu</button>
                 </div>
             </div>
         </div>
@@ -1429,6 +1429,9 @@ function printKartuLogin() {
     <div class="no-print" style="margin: 15px; text-align:right;"><button onclick="window.print()" style="padding:10px 20px; background:#1e3a8a; color:white; border:none; border-radius:5px;">Cetak Dokumen</button></div>
     <div class="grid">`;
     usersToPrint.forEach(u => {
+        // Ubah format YYYY-MM-DD ke DD-MM-YYYY
+        const tglTampil = u.TglLahir ? u.TglLahir.split('-').reverse().join('-') : '-';
+        
         html += `<div class="card">
             <div style="display:flex; align-items:center; border-bottom:2px solid #000; padding-bottom:5px; margin-bottom:10px;">
                 <img src="https://lh3.googleusercontent.com/d/1SCvmdQxuqmX_f0gBaYt0Ob53Tws97Hnq" style="width:50px; height:50px; margin-right:15px;">
@@ -1439,6 +1442,7 @@ function printKartuLogin() {
                 <table style="flex-grow:1;">
                     <tr><td width="30%"><strong>Nama</strong></td><td>:</td><td>${u.Nama}</td></tr>
                     <tr><td><strong>Kls / Sesi</strong></td><td>:</td><td>${u.Kelas} / Sesi ${u.Sesi || '1'}</td></tr>
+                    <tr><td><strong>Tgl Lahir</strong></td><td>:</td><td>${tglTampil}</td></tr>
                     <tr><td><strong>Username</strong></td><td>:</td><td><strong>${u.Username}</strong></td></tr>
                     <tr><td><strong>Password</strong></td><td>:</td><td><strong>${u.Password}</strong></td></tr>
                 </table>
