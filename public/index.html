@@ -1435,15 +1435,15 @@ function printKartuLogin() {
                 <div><h3 style="margin:0; font-size:15px;">KARTU LOGIN CBT KKGMI</h3><p style="margin:0; font-size:11px;">KOTA SURABAYA 10</p></div>
             </div>
             <div style="display:flex; gap:15px; align-items:center;">
-                <div style="flex-shrink:0;"><img src="${u.Foto || 'https://via.placeholder.com/80'}" style="width:80px; height:100px; object-fit:cover; border:2px solid #ccc; border-radius:4px;"></div>
-                <table style="flex-grow:1;">
+                        <div style="flex-shrink:0;"><img src="${u.Foto || 'https://via.placeholder.com/80'}" style="width:80px; height:100px; object-fit:cover; border:2px solid #ccc; border-radius:4px;"></div>
+                        <table style="flex-grow:1;">
                             <tr><td width="30%"><strong>Nama</strong></td><td>:</td><td>${u.Nama}</td></tr>
                             <tr><td><strong>Kls / Sesi</strong></td><td>:</td><td>${u.Kelas} / Sesi ${u.Sesi || '1'}</td></tr>
                             <tr><td><strong>Tgl Lahir</strong></td><td>:</td><td>${u.TglLahir ? u.TglLahir.split('-').reverse().join('-') : '-'}</td></tr>
                             <tr><td><strong>Username</strong></td><td>:</td><td><strong>${u.Username}</strong></td></tr>
                             <tr><td><strong>Password</strong></td><td>:</td><td><strong>${u.Password}</strong></td></tr>
-                </table>
-            </div>
+                        </table>
+                    </div>
         </div>`;
     });
     html += `</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
