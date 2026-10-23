@@ -1413,13 +1413,10 @@ function renderAdministrasi() {
 }
 
 function printKartuLogin() {
-    const kls = $('#adm-kls-kartu').val(); 
-    const sesi = $('#adm-sesi-kartu').val();
+    const kls = $('#adm-kls-kartu').val(); const sesi = $('#adm-sesi-kartu').val();
     let usersToPrint = gAdminData.users;
-    
     if (kls !== 'ALL') usersToPrint = usersToPrint.filter(u => u.Kelas === kls);
     if (sesi !== 'ALL') usersToPrint = usersToPrint.filter(u => String(u.Sesi) === sesi);
-    
     if (usersToPrint.length === 0) return Swal.fire('Kosong', 'Tidak ada data siswa untuk kelas/sesi tersebut.', 'info');
     
     let html = `<html><head><title>Cetak Kartu Login</title><style>
@@ -1433,7 +1430,7 @@ function printKartuLogin() {
     <div class="grid">`;
     
     usersToPrint.forEach(u => {
-        // Pengamanan ekstra: Pastikan TglLahir valid dan berupa teks sebelum dimanipulasi
+        // Pengamanan data: Pastikan format TglLahir valid sebelum dimanipulasi
         let tglTampil = '-';
         if (u.TglLahir && typeof u.TglLahir === 'string') {
             tglTampil = u.TglLahir.split('-').reverse().join('-');
@@ -1456,12 +1453,8 @@ function printKartuLogin() {
             </div>
         </div>`;
     });
-    
     html += `</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
-    
-    const win = window.open('', '', 'width=800,height=600'); 
-    win.document.write(html); 
-    win.document.close();
+    const win = window.open('', '', 'width=800,height=600'); win.document.write(html); win.document.close();
 }
 
 function printDaftarHadir() {
