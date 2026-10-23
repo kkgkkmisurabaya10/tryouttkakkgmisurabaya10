@@ -1413,10 +1413,13 @@ function renderAdministrasi() {
 }
 
 function printKartuLogin() {
-    const kls = $('#adm-kls-kartu').val(); const sesi = $('#adm-sesi-kartu').val();
+    const kls = $('#adm-kls-kartu').val(); 
+    const sesi = $('#adm-sesi-kartu').val();
     let usersToPrint = gAdminData.users;
+    
     if (kls !== 'ALL') usersToPrint = usersToPrint.filter(u => u.Kelas === kls);
     if (sesi !== 'ALL') usersToPrint = usersToPrint.filter(u => String(u.Sesi) === sesi);
+    
     if (usersToPrint.length === 0) return Swal.fire('Kosong', 'Tidak ada data siswa untuk kelas/sesi tersebut.', 'info');
     
     let html = `<html><head><title>Cetak Kartu Login</title><style>
@@ -1428,7 +1431,14 @@ function printKartuLogin() {
     </style></head><body>
     <div class="no-print" style="margin: 15px; text-align:right;"><button onclick="window.print()" style="padding:10px 20px; background:#1e3a8a; color:white; border:none; border-radius:5px;">Cetak Dokumen</button></div>
     <div class="grid">`;
-        usersToPrint.forEach(u => {
+    
+    usersToPrint.forEach(u => {
+        // Pengamanan ekstra: Pastikan TglLahir valid dan berupa teks sebelum dimanipulasi
+        let tglTampil = '-';
+        if (u.TglLahir && typeof u.TglLahir === 'string') {
+            tglTampil = u.TglLahir.split('-').reverse().join('-');
+        }
+
         html += `<div class="card">
             <div style="display:flex; align-items:center; border-bottom:2px solid #000; padding-bottom:5px; margin-bottom:10px;">
                 <img src="https://lh3.googleusercontent.com/d/1SCvmdQxuqmX_f0gBaYt0Ob53Tws97Hnq" style="width:50px; height:50px; margin-right:15px;">
@@ -1439,14 +1449,19 @@ function printKartuLogin() {
                 <table style="flex-grow:1;">
                     <tr><td width="30%"><strong>Nama</strong></td><td>:</td><td>${u.Nama}</td></tr>
                     <tr><td><strong>Kls / Sesi</strong></td><td>:</td><td>${u.Kelas} / Sesi ${u.Sesi || '1'}</td></tr>
+                    <tr><td><strong>Tgl Lahir</strong></td><td>:</td><td>${tglTampil}</td></tr>
                     <tr><td><strong>Username</strong></td><td>:</td><td><strong>${u.Username}</strong></td></tr>
                     <tr><td><strong>Password</strong></td><td>:</td><td><strong>${u.Password}</strong></td></tr>
                 </table>
             </div>
         </div>`;
     });
+    
     html += `</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
-    const win = window.open('', '', 'width=800,height=600'); win.document.write(html); win.document.close();
+    
+    const win = window.open('', '', 'width=800,height=600'); 
+    win.document.write(html); 
+    win.document.close();
 }
 
 function printDaftarHadir() {
