@@ -624,6 +624,9 @@ function loadPage(page) {
 function encodeImageFileAsURL(element) { let file = element.files[0]; let reader = new FileReader(); reader.onloadend = function() { $('#mu-foto-b64').val(reader.result); }; if(file) reader.readAsDataURL(file); }
     
 function renderUsers(users) {
+    // Urutkan data secara alfabetis berdasarkan Nama
+    users.sort((a, b) => (a.Nama || "").localeCompare(b.Nama || ""));
+    
     window.allUsersData = users;
     filteredUsersData = users;
     userCurrentPage = 1;
@@ -868,7 +871,7 @@ function applyFilterUsers() {
         let matchNama = (u.Nama || "").toLowerCase().includes(kataKunci) || (u.Username || "").toLowerCase().includes(kataKunci);
         let matchSekolah = sekolah === "" || u.Sekolah === sekolah;
         return matchNama && matchSekolah;
-    });
+    }).sort((a, b) => (a.Nama || "").localeCompare(b.Nama || "")); // Mengurutkan A-Z
     
     userCurrentPage = 1;
     paginateUsers();
