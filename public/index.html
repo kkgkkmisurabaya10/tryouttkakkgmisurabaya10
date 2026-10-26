@@ -401,6 +401,9 @@ let violationCount = 0; const maxViolations = 3; let isExamFinished = false; let
 let isSurveyMode = false;
 let currentSurveyIdx = 0;
 let totalSurveyQ = 0;
+let userCurrentPage = 1;
+let userRowsPerPage = 10;
+let filteredUsersData = [];
 
 // AUDIO CONTEXT UNTUK PERINGATAN PELANGGARAN
 let audioCtx = null;
@@ -622,6 +625,9 @@ function encodeImageFileAsURL(element) { let file = element.files[0]; let reader
     
 function renderUsers(users) {
     window.allUsersData = users;
+    filteredUsersData = users;
+    userCurrentPage = 1;
+    
     const role = String(user.Role).trim().toLowerCase();
     const isAdmin = role === 'admin';
     const canEdit = role === 'admin' || role === 'guru'; 
@@ -647,15 +653,24 @@ function renderUsers(users) {
     </div>
     
     <div class="row g-2 mb-3 p-3 bg-white rounded-4 shadow-sm border">
-        <div class="col-md-6">
-            <label class="small fw-bold text-muted ms-1">Cari Nama / Username Siswa</label>
+        <div class="col-md-4">
+            <label class="small fw-bold text-muted ms-1">Cari Nama / Username</label>
             <input type="text" id="filter-user-nama" class="form-control bg-light border-0 rounded-pill px-3" placeholder="Ketik nama atau username..." onkeyup="applyFilterUsers()">
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
             <label class="small fw-bold text-muted ms-1">Filter Sekolah</label>
             <select id="filter-user-sekolah" class="form-select bg-light border-0 rounded-pill px-3" onchange="applyFilterUsers()">
                 <option value="">Semua Sekolah</option>
                 ${uniqueSekolah.map(s => `<option value="${s}">${s}</option>`).join('')}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="small fw-bold text-muted ms-1">Tampilkan Baris</label>
+            <select id="user-rows-per-page" class="form-select bg-light border-0 rounded-pill px-3" onchange="changeUserRowsPerPage()">
+                <option value="10">10 Baris</option>
+                <option value="20">20 Baris</option>
+                <option value="50">50 Baris</option>
+                <option value="100">100 Baris</option>
             </select>
         </div>
     </div>
@@ -680,10 +695,11 @@ function renderUsers(users) {
                 </table>
             </div>
         </div>
-    </div>`;
+    </div>
+    <div id="user-pagination" class="d-flex justify-content-between align-items-center mt-3 px-2"></div>`;
     
     $('#content-area').html(h);
-    renderUserRows(users);
+    paginateUsers();
 }
 
 function renderUserRows(data) {
@@ -838,15 +854,54 @@ function applyFilterUsers() {
     let kataKunci = $('#filter-user-nama').val().toLowerCase();
     let sekolah = $('#filter-user-sekolah').val();
     
-    let filtered = window.allUsersData.filter(u => {
+    filteredUsersData = window.allUsersData.filter(u => {
         let matchNama = (u.Nama || "").toLowerCase().includes(kataKunci) || (u.Username || "").toLowerCase().includes(kataKunci);
         let matchSekolah = sekolah === "" || u.Sekolah === sekolah;
         return matchNama && matchSekolah;
     });
     
-    renderUserRows(filtered);
+    userCurrentPage = 1;
+    paginateUsers();
 }
 
+function changeUserRowsPerPage() {
+    userRowsPerPage = parseInt($('#user-rows-per-page').val());
+    userCurrentPage = 1;
+    paginateUsers();
+}
+
+function paginateUsers() {
+    let totalRows = filteredUsersData.length;
+    let totalPages = Math.ceil(totalRows / userRowsPerPage) || 1;
+    
+    if (userCurrentPage > totalPages) userCurrentPage = totalPages;
+    if (userCurrentPage < 1) userCurrentPage = 1;
+
+    let startIdx = (userCurrentPage - 1) * userRowsPerPage;
+    let endIdx = startIdx + userRowsPerPage;
+    
+    let pagedData = filteredUsersData.slice(startIdx, endIdx);
+    
+    // Gunakan fungsi render bawaan yang mengekstrak html data ke users-tbody
+    renderUserRows(pagedData); 
+    
+    let startText = totalRows === 0 ? 0 : startIdx + 1;
+    let endText = endIdx > totalRows ? totalRows : endIdx;
+    
+    let pagHtml = `<div class="small text-muted fw-bold">Menampilkan ${startText} - ${endText} dari total ${totalRows}</div>`;
+    pagHtml += `<div class="btn-group shadow-sm">
+        <button class="btn btn-sm btn-outline-primary fw-bold" onclick="goToUserPage(${userCurrentPage - 1})" ${userCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+        <button class="btn btn-sm btn-primary fw-bold disabled bg-primary text-white border-primary">${userCurrentPage} / ${totalPages}</button>
+        <button class="btn btn-sm btn-outline-primary fw-bold" onclick="goToUserPage(${userCurrentPage + 1})" ${userCurrentPage === totalPages ? 'disabled' : ''}>Next &raquo;</button>
+    </div>`;
+    
+    $('#user-pagination').html(pagHtml);
+}
+
+function goToUserPage(page) {
+    userCurrentPage = page;
+    paginateUsers();
+}
 function toggleAllUsers(el) {
     $('.check-user').prop('checked', el.checked);
     toggleBulkDeleteUsersBtn();
