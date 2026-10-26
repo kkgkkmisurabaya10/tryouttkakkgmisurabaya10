@@ -682,6 +682,7 @@ function renderUsers(users) {
                     <thead class="table-light">
                         <tr>
                             ${isAdmin ? `<th width="50"><input type="checkbox" class="form-check-input" id="check-all-users" onchange="toggleAllUsers(this)"></th>` : ''}
+                            <th width="50" class="text-center">No</th>
                             <th>Foto & Nama</th>
                             <th>Username</th>
                             <th>Role</th>
@@ -708,14 +709,23 @@ function renderUserRows(data) {
     const canEdit = role === 'admin' || role === 'guru'; 
     let h = '';
     
+    // Menghitung offset nomor urut berdasarkan pagination
+    let startIdx = 0;
+    if (typeof userCurrentPage !== 'undefined' && typeof userRowsPerPage !== 'undefined') {
+        startIdx = (userCurrentPage - 1) * userRowsPerPage;
+    }
+    
     if(!data || data.length === 0) {
-        h = `<tr><td colspan="${isAdmin ? 8 : (canEdit ? 7 : 6)}" class="text-center text-muted py-4">Data peserta tidak ditemukan.</td></tr>`;
+        h = `<tr><td colspan="${isAdmin ? 9 : (canEdit ? 8 : 7)}" class="text-center text-muted py-4">Data peserta tidak ditemukan.</td></tr>`;
     } else {
-        data.forEach(u => {
+        data.forEach((u, i) => {
             const uid = u.ID || u.id; 
             const safeData = encodeURIComponent(JSON.stringify(u));
+            const rowNum = startIdx + i + 1; // Kalkulasi nomor urut
+            
             h += `<tr>
                 ${isAdmin ? `<td><input type="checkbox" class="form-check-input check-user" value="${uid}" onchange="toggleBulkDeleteUsersBtn()"></td>` : ''}
+                <td class="text-center fw-bold text-muted">${rowNum}</td>
                 <td>
                     <div class="d-flex align-items-center">
                         <img src="${u.Foto || 'https://via.placeholder.com/40'}" class="rounded-circle me-3 shadow-sm" width="40" height="40" style="object-fit:cover;">
