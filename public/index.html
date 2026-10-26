@@ -637,6 +637,26 @@ function renderUsers(users) {
     
     let uniqueSekolah = [...new Set(users.map(u => u.Sekolah || ''))].filter(Boolean);
 
+    // LOGIKA DETEKSI DUPLIKAT USERNAME
+    let usernameCounts = {};
+    users.forEach(u => {
+        let uname = String(u.Username || "").trim().toLowerCase();
+        if (uname) usernameCounts[uname] = (usernameCounts[uname] || 0) + 1;
+    });
+    // Simpan daftar username yang ganda ke variabel global
+    window.duplicateUsernames = Object.keys(usernameCounts).filter(k => usernameCounts[k] > 1);
+    
+    // Tampilan Notifikasi jika ada duplikat
+    let duplicateAlert = '';
+    if (isAdmin && window.duplicateUsernames.length > 0) {
+        let countGanda = window.duplicateUsernames.length;
+        duplicateAlert = `
+        <div class="alert alert-danger shadow-sm rounded-4 mb-3 border-danger">
+            <h6 class="fw-bold mb-1"><i class="fas fa-exclamation-triangle me-2"></i>PERHATIAN: Ditemukan ${countGanda} Username Ganda!</h6>
+            <span class="small">Sistem mendeteksi ada peserta dengan Username yang sama (ditandai warna merah pada tabel). Harap edit atau hapus baris yang ganda agar siswa tidak bermasalah saat login.</span>
+        </div>`;
+    }
+
     let h = `<div class="d-flex justify-content-between mb-3 flex-wrap gap-2 align-items-center">
         <div>
             ${isAdmin ? `
@@ -654,6 +674,8 @@ function renderUsers(users) {
             ` : ''}
         </div>
     </div>
+    
+    ${duplicateAlert}
     
     <div class="row g-2 mb-3 p-3 bg-white rounded-4 shadow-sm border">
         <div class="col-md-4">
@@ -700,7 +722,7 @@ function renderUsers(users) {
             </div>
         </div>
     </div>
-    <div id="user-pagination" class="d-flex justify-content-between align-items-center mt-3 px-2"></div>`;
+    <div id="user-pagination" class="d-flex justify-content-between align-items-center mt-3 px-2 mb-4"></div>`;
     
     $('#content-area').html(h);
     paginateUsers();
@@ -712,7 +734,6 @@ function renderUserRows(data) {
     const canEdit = role === 'admin' || role === 'guru'; 
     let h = '';
     
-    // Menghitung offset nomor urut berdasarkan pagination
     let startIdx = 0;
     if (typeof userCurrentPage !== 'undefined' && typeof userRowsPerPage !== 'undefined') {
         startIdx = (userCurrentPage - 1) * userRowsPerPage;
@@ -724,25 +745,30 @@ function renderUserRows(data) {
         data.forEach((u, i) => {
             const uid = u.ID || u.id; 
             const safeData = encodeURIComponent(JSON.stringify(u));
-            const rowNum = startIdx + i + 1; // Kalkulasi nomor urut
+            const rowNum = startIdx + i + 1; 
             
-            h += `<tr>
+            // Cek apakah username ini ganda
+            let uname = String(u.Username || "").trim().toLowerCase();
+            let isDuplicate = window.duplicateUsernames && window.duplicateUsernames.includes(uname);
+            let rowClass = isDuplicate ? 'table-danger' : '';
+            
+            h += `<tr class="${rowClass}">
                 ${isAdmin ? `<td><input type="checkbox" class="form-check-input check-user" value="${uid}" onchange="toggleBulkDeleteUsersBtn()"></td>` : ''}
                 <td class="text-center fw-bold text-muted">${rowNum}</td>
                 <td>
                     <div class="d-flex align-items-center">
-                        <img src="${u.Foto || 'https://via.placeholder.com/40'}" class="rounded-circle me-3 shadow-sm" width="40" height="40" style="object-fit:cover;">
-                        <span class="fw-bold text-dark">${u.Nama}</span>
+                        <img src="${u.Foto || 'https://via.placeholder.com/40'}" class="rounded-circle me-3 shadow-sm bg-white" width="40" height="40" style="object-fit:cover;">
+                        <span class="fw-bold ${isDuplicate ? 'text-danger' : 'text-dark'}">${u.Nama}</span>
                     </div>
                 </td>
-                <td>${u.Username}</td>
+                <td class="${isDuplicate ? 'fw-bold text-danger' : ''}">${u.Username}</td>
                 <td><span class="badge bg-${String(u.Role).trim().toLowerCase()==='admin'?'danger':(String(u.Role).trim().toLowerCase()==='guru'?'warning text-dark':'primary')}">${u.Role}</span></td>
                 <td>${u.Kelas || '-'}</td>
                 <td><span class="badge bg-secondary">Sesi ${u.Sesi || '1'}</span></td>
                 <td>${u.Sekolah || '-'}</td>
                 ${canEdit ? `<td>
-                    <button class="btn btn-sm btn-outline-dark me-1 rounded-circle" onclick="editUser('${safeData}')" title="Edit"><i class="fas fa-edit"></i></button>
-                    ${isAdmin ? `<button class="btn btn-sm btn-outline-danger rounded-circle" onclick="delUser('${uid}')" title="Hapus"><i class="fas fa-trash"></i></button>` : ''}
+                    <button class="btn btn-sm btn-outline-dark me-1 rounded-circle bg-white" onclick="editUser('${safeData}')" title="Edit"><i class="fas fa-edit"></i></button>
+                    ${isAdmin ? `<button class="btn btn-sm btn-outline-danger rounded-circle bg-white" onclick="delUser('${uid}')" title="Hapus"><i class="fas fa-trash"></i></button>` : ''}
                 </td>` : ''}
             </tr>`;
         });
@@ -968,7 +994,36 @@ async function bulkDeleteUsers() {
         Swal.fire('Gagal Semua', `Gagal menghapus data. Pastikan peserta yang dipilih tidak memiliki rekap nilai di menu Hasil Nilai (hapus nilainya lebih dulu).`, 'error');
     }
 }
-
+function delUser(uid) {
+    Swal.fire({
+        title: 'Hapus Peserta?',
+        text: 'Data peserta ini akan dihapus secara permanen!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Hapus!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showLoad(true);
+            google.script.run
+            .withSuccessHandler((res) => {
+                showLoad(false);
+                if (res && res.status === 'success') {
+                    Swal.fire('Terhapus!', 'Data peserta berhasil dihapus.', 'success');
+                    loadPage('admin-users'); // Refresh tabel
+                } else {
+                    Swal.fire('Gagal', res.msg || 'Gagal menghapus data.', 'error');
+                }
+            })
+            .withFailureHandler((err) => {
+                showLoad(false);
+                Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+            })
+            .adminManageUser('delete', { id: uid });
+        }
+    });
+}
 function downloadUserTemplate() {
     const wsData = [{
         "Nama": "Siswa Contoh",
