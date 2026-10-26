@@ -80,6 +80,17 @@ export async function POST(req) {
             activeUjian: exams.rows.filter(e => e.Status === 'Aktif').length 
         };
 
+        // TAMBAHAN: Menghitung jumlah peserta per sekolah
+        let schoolCounts = {};
+        users.rows.forEach(u => {
+            let s = (u.Sekolah || 'Tanpa Sekolah').trim();
+            schoolCounts[s] = (schoolCounts[s] || 0) + 1;
+        });
+        output.schoolSummary = Object.keys(schoolCounts).map(k => ({
+            Sekolah: k,
+            Jumlah: schoolCounts[k]
+        })).sort((a, b) => b.Jumlah - a.Jumlah); // Urutkan dari siswa terbanyak
+
         const schoolRankQuery = await turso.execute(`
             SELECT u.Sekolah, AVG(r.TotalNilai) as RataRata 
             FROM Results r 
