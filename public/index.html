@@ -404,6 +404,14 @@ let totalSurveyQ = 0;
 let userCurrentPage = 1;
 let userRowsPerPage = 10;
 let filteredUsersData = [];
+// Deklarasi Variabel Global
+let deviceId = localStorage.getItem('cbt_device_id');
+if (!deviceId) { 
+    deviceId = 'DEV-' + Math.random().toString(36).substr(2, 9) + Date.now(); 
+    localStorage.setItem('cbt_device_id', deviceId); 
+}
+
+let examSubmitting = false; let user = null; let gData = {}; 
 
 // AUDIO CONTEXT UNTUK PERINGATAN PELANGGARAN
 let audioCtx = null;
@@ -2527,16 +2535,18 @@ function startExam(eid) {
                     $('#do-exam-title').text(user.Nama);
                     try { localStorage.setItem('cbt_active_exam', JSON.stringify({ id: eid, qs: res.data, dur: res.duration, start: Date.now(), judul: res.judul, token: res.token })); } catch(e) {}
                     violationCount = 0; enableSecurity(); runExam(res.data, res.duration, false);
-                } else Swal.fire('Gagal Mengunduh Soal', res.msg, 'error');
+                } else {
+                    Swal.fire('Gagal Memulai', res.msg, 'error'); // Menampilkan pesan penolakan dari server jika perangkat terkunci
+                }
             })
             .withFailureHandler(err => {
                 showLoad(false); Swal.fire('Error', err.message || 'Kesalahan koneksi', 'error');
             })
-            .getExamPack(eid, user.ID);
+            .getExamPack(eid, user.ID, deviceId); // UPDATE: Menyertakan argumen deviceId
         }
     });
 }
-
+    
 function enableSecurity() { 
     violationCount = 0; isExamFinished = false; violationLock = false; 
     document.addEventListener("visibilitychange", handleVisibilityChange); 
