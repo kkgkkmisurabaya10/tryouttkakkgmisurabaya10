@@ -2092,21 +2092,79 @@ function handleUploadQuestionsExcel(e) {
     };
     reader.readAsBinaryString(file);
 }
+    
+function downloadSurveyTemplate() {
+    const wsData = [
+        {
+            "Nomor": 1,
+            "Stimulus / Pengantar": "Fasilitas dan lingkungan kelas sangat berpengaruh terhadap kenyamanan belajar siswa.",
+            "Pernyataan (Pisahkan dgn |)": "Kelas memiliki pencahayaan yang cukup.|Sirkulasi udara di kelas sangat baik.|Saya merasa nyaman belajar di kelas ini.",
+            "Skala / Kunci (Pisahkan dgn |)": "Sangat Setuju|Setuju|Tidak Setuju|Sangat Tidak Setuju"
+        },
+        {
+            "Nomor": 2,
+            "Stimulus / Pengantar": "Bagaimana frekuensi kebersihan dan keamanan fasilitas sekolah?",
+            "Pernyataan (Pisahkan dgn |)": "Kantin sekolah selalu bersih dan higienis.|Kamar mandi bebas dari bau tidak sedap.",
+            "Skala / Kunci (Pisahkan dgn |)": "Selalu|Sering|Kadang-kadang|Tidak Pernah"
+        }
+    ];
+    
+    const ws = XLSX.utils.json_to_sheet(wsData);
+    const wscols = [ {wch:8}, {wch:50}, {wch:50}, {wch:40} ];
+    ws['!cols'] = wscols;
 
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template_Survei");
+    XLSX.writeFile(wb, "Template_Upload_Survei.xlsx");
+}
+
+function handleUploadSurveyExcel(e) {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const json = XLSX.utils.sheet_to_json(XLSX.read(evt.target.result, {type: 'binary'}).Sheets[XLSX.read(evt.target.result, {type: 'binary'}).SheetNames[0]]);
+        let formattedData = json.map(row => {
+            let stmtsRaw = row['Pernyataan (Pisahkan dgn |)'] ? String(row['Pernyataan (Pisahkan dgn |)']).split('|').map(s => s.trim()) : [];
+            let scaleRaw = row['Skala / Kunci (Pisahkan dgn |)'] ? String(row['Skala / Kunci (Pisahkan dgn |)']).split('|').map(s => s.trim()) : [];
+            return { 
+                num: row['Nomor'] || 1, 
+                type: 'SURVEY', 
+                score: 0, 
+                text: row['Stimulus / Pengantar'] || '', 
+                options: stmtsRaw, 
+                key: scaleRaw 
+            };
+        }).filter(q => q.text !== '');
+        
+        if(formattedData.length === 0) return Swal.fire('Error', 'Format data tidak valid.', 'error');
+        
+        showLoad(true);
+        google.script.run
+        .withSuccessHandler(res => {
+            showLoad(false);
+            if(res.status === 'success') { Swal.fire('Sukses', res.msg, 'success'); loadQList(); } else Swal.fire('Gagal', res.msg, 'error');
+        })
+        .withFailureHandler(err => {
+            showLoad(false); Swal.fire('Error', err.message || 'Kesalahan server', 'error');
+        })
+        .adminBatchSaveQuestions(activeExamId, formattedData, user.ID);
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = ''; // Reset input file
+}
 function loadQList() {
     $('#q-list-container').html('<div class="text-center p-5"><div class="spinner"></div></div>');
     google.script.run
     .withSuccessHandler(qs => {
         let html = ''; lastQuestionNum = 0; currentQuestionsData = qs || [];
-        let topActions = '';
-        if(!isSurveyMode) {
-            topActions = `<div class="d-flex justify-content-end mb-3 gap-2 flex-wrap bg-white p-3 rounded-4 shadow-sm border">
-                <button class="btn btn-outline-info shadow-sm rounded-pill px-4 fw-bold" onclick="downloadQuestionTemplate()"><i class="fas fa-file-excel me-2"></i> Template Excel</button>
-                <label class="btn btn-outline-success shadow-sm m-0 rounded-pill px-4 fw-bold"><i class="fas fa-upload me-2"></i> Upload Excel <input type="file" hidden accept=".xlsx,.xls" onchange="handleUploadQuestionsExcel(event)"></label>
-                <button class="btn btn-info text-white shadow-sm rounded-pill px-4 fw-bold" onclick="previewAllQ()"><i class="fas fa-desktop me-2"></i> Preview Soal</button>
-                <button class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold" onclick="downloadAllQ()"><i class="fas fa-file-pdf me-2"></i> Download HTML/PDF</button>
-            </div>`;
-        }
+        
+        // UPDATE: Tombol aksi sekarang mendukung mode Ujian dan Survei
+        let topActions = `<div class="d-flex justify-content-end mb-3 gap-2 flex-wrap bg-white p-3 rounded-4 shadow-sm border">
+            <button class="btn btn-outline-info shadow-sm rounded-pill px-4 fw-bold" onclick="${isSurveyMode ? 'downloadSurveyTemplate()' : 'downloadQuestionTemplate()'}"><i class="fas fa-file-excel me-2"></i> Template Excel</button>
+            <label class="btn btn-outline-success shadow-sm m-0 rounded-pill px-4 fw-bold"><i class="fas fa-upload me-2"></i> Upload Excel <input type="file" hidden accept=".xlsx,.xls" onchange="${isSurveyMode ? 'handleUploadSurveyExcel(event)' : 'handleUploadQuestionsExcel(event)'}"></label>
+            <button class="btn btn-info text-white shadow-sm rounded-pill px-4 fw-bold" onclick="previewAllQ()"><i class="fas fa-desktop me-2"></i> Preview Soal</button>
+            <button class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold" onclick="downloadAllQ()"><i class="fas fa-file-pdf me-2"></i> Download HTML/PDF</button>
+        </div>`;
         
         if (qs && qs.length > 0) {
             lastQuestionNum = Math.max(...qs.map(q => Number(q.Nomor) || 0));
@@ -2125,7 +2183,19 @@ function generateQHTML(q) {
     let inp = '';
     let cleanedQuestion = decodeHTML(q.Pertanyaan);
 
-    if(q.Tipe==='PGKK') {
+    if (q.Tipe === 'SURVEY') {
+        const stmts = JSON.parse(q.Options || "[]");
+        const scales = JSON.parse(q.Key || "[]");
+        inp = `<table style="width:100%; border-collapse: collapse; margin-top:15px; background:white; font-size:14px;" border="1"><thead><tr style="background:#f8f9fa;"><th style="padding:10px; text-align:left;">Pernyataan / Aspek Penilaian</th>`;
+        scales.forEach(s => inp += `<th style="padding:10px; text-align:center;">${s}</th>`);
+        inp += `</tr></thead><tbody>`;
+        stmts.forEach(stmt => {
+            inp += `<tr><td style="padding:10px;">${stmt}</td>`;
+            scales.forEach(s => inp += `<td style="padding:10px; text-align:center; vertical-align:middle;"><input type="radio" style="transform:scale(1.2);" disabled></td>`);
+            inp += `</tr>`;
+        });
+        inp += `</tbody></table>`;
+    } else if(q.Tipe==='PGKK') {
         const opts = JSON.parse(q.Options||"[]");
         inp = `<table style="width:100%; border-collapse: collapse; margin-top:15px; background:white;" border="1"><thead><tr style="background:#f8f9fa;"><th style="padding:10px; text-align:left;">PERNYATAAN</th><th width="15%" style="padding:10px; text-align:center;">BENAR</th><th width="15%" style="padding:10px; text-align:center;">SALAH</th></tr></thead><tbody>`;
         opts.forEach((o,x)=> { inp+=`<tr><td style="padding:10px;">${o}</td><td style="padding:10px; text-align:center; vertical-align:middle;"><input type="radio" name="ans-${q.QID}-${x}" value="B" style="transform:scale(1.2);"></td><td style="padding:10px; text-align:center; vertical-align:middle;"><input type="radio" name="ans-${q.QID}-${x}" value="S" style="transform:scale(1.2);"></td></tr>`; });
