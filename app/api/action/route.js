@@ -352,7 +352,9 @@ export async function POST(req) {
       const [role, , sekolah] = args;
       let sql = `
         SELECT r.ResultID, r.TotalNilai, r.WaktuSubmit, r.Detail, r.SiswaID, r.ExamID, r.Pelanggaran,
-               u.Nama AS NamaSiswa, u.Kelas AS KelasSiswa, u.Sekolah AS SekolahSiswa,
+               COALESCE(u.Nama, 'Akun Telah Dihapus') AS NamaSiswa, 
+               COALESCE(u.Kelas, '-') AS KelasSiswa, 
+               COALESCE(u.Sekolah, '-') AS SekolahSiswa,
                e.Judul AS JudulUjian, e.Mapel AS Mapel, e.PembuatID AS PembuatID,
                e.ShowStats AS ShowStats,
                (SELECT Nama FROM Users WHERE ID = e.PembuatID) AS PembuatNama
