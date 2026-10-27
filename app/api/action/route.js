@@ -158,11 +158,12 @@ export async function POST(req) {
 
     if (action === 'adminManageUser') {
       const mode = args[0]; const d = args[1];
+      
       if (mode === 'save') {
         const id = d.id || ('U' + Date.now());
         const cek = await turso.execute({ sql: "SELECT ID FROM Users WHERE ID = ?", args: [id] });
-        if (cek.rows.length > 0) {
-          await turso.execute({ sql: "UPDATE Users SET Nama=?, Username=?, Password=?, Role=?, Sekolah=?, Kelas=?, TglLahir=?, Foto=?, Sesi=? WHERE ID=?", args: [d.nama, d.username, d.password, d.role, d.sekolah, d.kelas, d.tglLahir, d.foto, d.sesi, id] });
+if (cek.rows.length > 0) {
+          await turso.execute({ sql: "UPDATE Users SET Nama=?, Username=?, Password=?, Role=?, Sekolah=?, Kelas=?, TglLahir=?, Foto=?, Sesi=?, DeviceID='RESET' WHERE ID=?", args: [d.nama, d.username, d.password, d.role, d.sekolah, d.kelas, d.tglLahir, d.foto, d.sesi, id] });
         } else {
           await turso.execute({ sql: "INSERT INTO Users (ID, Nama, Username, Password, Role, Sekolah, Kelas, TglLahir, Foto, Sesi) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [id, d.nama, d.username, d.password, d.role, d.sekolah, d.kelas, d.tglLahir, d.foto, d.sesi] });
         }
@@ -243,21 +244,43 @@ export async function POST(req) {
         return NextResponse.json({ status: 'empty' });
     }
 
-    if (action === 'submitSurveyResponse') {
+if (action === 'submitSurveyResponse') {
         const uid = args[0]; const sid = args[1]; const answers = args[2]; const waktuSubmit = args[3];
+        
+        // BLOKIR SURVEI GANDA
+        const checkDup = await turso.execute({ sql: "SELECT ResultID FROM Results WHERE SiswaID=? AND ExamID=?", args: [uid, sid] });
+        if(checkDup.rows.length > 0) return NextResponse.json({ status: 'success', msg: 'Survei sudah terkirim sebelumnya' });
+
         await turso.execute({ 
            sql: "INSERT INTO Results (ResultID, SiswaID, ExamID, TotalNilai, Detail, Pelanggaran, WaktuSubmit) VALUES (?, ?, ?, 0, ?, 'Survey Response', ?)", 
            args: ['SRES' + Date.now(), uid, sid, JSON.stringify(answers), waktuSubmit] 
         });
-        try { await turso.execute({ sql: "UPDATE Users SET Status='Survei Selesai', Terjawab=TotalSoal WHERE ID=?", args: [uid] }); } catch(e){}
-        return NextResponse.json({ status: 'success', msg: 'Survey dikirim' });
     }
 
     if (action === 'getExamPack') {
-      const eid = args[0]; const uid = args[1];
-      const history = await turso.execute({ sql: "SELECT * FROM Results WHERE ExamID=? AND SiswaID=?", args: [eid, uid]});
-      if(history.rows.length > 0) return NextResponse.json({status: 'error', msg: 'Ujian sudah dikerjakan.'});
+      const eid = args[0]; 
+      const uid = args[1]; 
+      const deviceId = args[2] || 'unknown'; // Tangkap Device ID dari frontend
+
+      // 1. Validasi jika sudah dikerjakan (Anti mengulang setelah batas waktu/selesai)
+      const history = await turso.execute({ sql: "SELECT ResultID FROM Results WHERE ExamID=? AND SiswaID=?", args: [eid, uid]});
+      if(history.rows.length > 0) return NextResponse.json({status: 'error', msg: 'Ujian sudah dikerjakan dan tidak dapat diulang.'});
       
+      // 2. Mekanisme Kunci Perangkat (Device Lock)
+      try {
+          await turso.execute("ALTER TABLE Users ADD COLUMN DeviceID VARCHAR(100)").catch(()=>{});
+          const userCheck = await turso.execute({ sql: "SELECT DeviceID FROM Users WHERE ID=?", args: [uid] });
+          const currentDevice = userCheck.rows[0].DeviceID;
+
+          if (currentDevice && currentDevice !== deviceId && currentDevice !== 'RESET') {
+              return NextResponse.json({status: 'error', msg: 'Akun Anda sedang digunakan untuk ujian di perangkat/browser lain!'});
+          } else {
+              // Kunci ke perangkat ini
+              await turso.execute({ sql: "UPDATE Users SET DeviceID=? WHERE ID=?", args: [deviceId, uid] });
+          }
+      } catch(e) {}
+      
+      // Load Soal dari Cache...
       const now = Date.now();
       if (!cacheStore.examPack[eid] || (now - cacheStore.lastFetchTime > CACHE_TTL)) {
           const examInfo = await turso.execute({ sql: "SELECT * FROM Exams WHERE ExamID=?", args:[eid] });
@@ -281,10 +304,14 @@ export async function POST(req) {
           token: cachedExam.token 
       });
     }
-
     if (action === 'submitExam') {
        const uid = args[0]; const eid = args[1]; const answers = args[2]; const violations = args[3]; const waktuSubmit = args[4];
        
+       // BLOKIR GANDA: Cek apakah sudah ada nilainya di database
+       const checkDup = await turso.execute({ sql: "SELECT ResultID FROM Results WHERE SiswaID=? AND ExamID=?", args: [uid, eid] });
+       if(checkDup.rows.length > 0) {
+           return NextResponse.json({ status: 'error', msg: 'Anda sudah mengumpulkan ujian ini sebelumnya.' });
+       }
        let rawTotalScore = 0; 
        let detailLog = [];
        let maxPossibleTotalScore = 0;
