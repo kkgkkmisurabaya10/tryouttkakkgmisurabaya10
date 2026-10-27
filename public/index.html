@@ -651,9 +651,9 @@ function renderUsers(users) {
     if (isAdmin && window.duplicateUsernames.length > 0) {
         let countGanda = window.duplicateUsernames.length;
         duplicateAlert = `
-        <div class="alert alert-danger shadow-sm rounded-4 mb-3 border-danger">
-            <h6 class="fw-bold mb-1"><i class="fas fa-exclamation-triangle me-2"></i>PERHATIAN: Ditemukan ${countGanda} Username Ganda!</h6>
-            <span class="small">Sistem mendeteksi ada peserta dengan Username yang sama (ditandai warna merah pada tabel). Harap edit atau hapus baris yang ganda agar siswa tidak bermasalah saat login.</span>
+        <div class="alert alert-danger shadow-sm rounded-4 mb-3 border-danger" style="cursor: pointer; transition: all 0.2s;" onclick="sortDuplicatesToTop()" onmouseover="this.style.backgroundColor='#f8d7da'; this.style.transform='scale(1.01)';" onmouseout="this.style.backgroundColor=''; this.style.transform='scale(1)';">
+            <h6 class="fw-bold mb-1 text-danger"><i class="fas fa-exclamation-triangle me-2"></i>PERHATIAN: Ditemukan ${countGanda} Username Ganda! (Klik di sini)</h6>
+            <span class="small text-dark">Sistem mendeteksi ada peserta dengan Username yang sama. <b>Klik kotak peringatan ini untuk mereset pencarian dan menaikkan semua data ganda ke halaman paling atas agar mudah diedit/dihapus.</b></span>
         </div>`;
     }
 
@@ -937,6 +937,51 @@ function paginateUsers() {
     $('#user-pagination').html(pagHtml);
 }
 
+function sortDuplicatesToTop() {
+    // Reset kolom pencarian dan filter sekolah agar semua data tampil
+    $('#filter-user-nama').val('');
+    $('#filter-user-sekolah').val('');
+    
+    // Gunakan salinan seluruh data
+    filteredUsersData = [...window.allUsersData];
+    
+    // Urutkan data: Duplikat di atas, lalu kelompokkan berdasarkan username yang sama
+    filteredUsersData.sort((a, b) => {
+        let unameA = String(a.Username || "").trim().toLowerCase();
+        let unameB = String(b.Username || "").trim().toLowerCase();
+        
+        let isDupA = window.duplicateUsernames.includes(unameA);
+        let isDupB = window.duplicateUsernames.includes(unameB);
+        
+        // Prioritaskan yang ganda ke atas
+        if (isDupA && !isDupB) return -1;
+        if (!isDupA && isDupB) return 1;
+        
+        // Jika keduanya ganda, kelompokkan berdampingan berdasarkan username-nya
+        if (isDupA && isDupB) {
+            return unameA.localeCompare(unameB);
+        }
+        
+        // Sisanya (yang tidak ganda) diurutkan seperti biasa (A-Z)
+        return String(a.Nama || "").localeCompare(String(b.Nama || ""));
+    });
+    
+    // Kembalikan ke halaman 1 dan render ulang tabel
+    userCurrentPage = 1;
+    paginateUsers();
+    
+    // Tampilkan pesan konfirmasi (opsional)
+    Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+    }).fire({
+        icon: 'info',
+        title: 'Data ganda telah dikumpulkan di urutan teratas'
+    });
+}
+    
 function goToUserPage(page) {
     userCurrentPage = page;
     paginateUsers();
