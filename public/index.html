@@ -2559,8 +2559,9 @@ function handleWindowBlur() { if (!isExamFinished) triggerViolation("Anda mening
 function handleFullscreenChange() { if (!isExamFinished && !document.fullscreenElement) { triggerViolation("Anda keluar dari mode fullscreen!"); try{document.documentElement.requestFullscreen().catch(()=>{});}catch(e){} } }
 
 function triggerViolation(msg) {
-    if(violationLock || isExamFinished) return;
-    violationLock = true; violationCount++;
+    if (violationLock || isExamFinished) return;
+    violationLock = true; // Langsung kunci agar event bersamaan terabaikan
+    violationCount++;
     
     if (violationCount >= maxViolations) {
         isExamFinished = true;
@@ -2577,10 +2578,92 @@ function triggerViolation(msg) {
             allowOutsideClick: false
         }).then(() => { 
             stopBeep(); 
-            violationLock = false; 
-            try{document.documentElement.requestFullscreen().catch(()=>{});}catch(e){} 
+            try { document.documentElement.requestFullscreen().catch(()=>{}); } catch(e) {} 
+            // Berikan JEDA 3 DETIK sebelum kunci dibuka, mencegah lonjakan event
+            setTimeout(() => { violationLock = false; }, 3000);
         });
     }
+}
+
+function processSubmission(retryCount = 0) {
+    if (examSubmitting && retryCount === 0) return;
+    
+    examSubmitting = true; // Kunci sistem pengiriman
+    isExamFinished = true; // Hentikan fungsi deteksi keamanan secara permanen
+    
+    const btn = $('#btn-finish'); 
+    const originalText = '<i class="fas fa-check-circle me-2"></i> Selesai Ujian';
+    
+    if (retryCount === 0) {
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Mengirim Data...');
+        clearInterval(timerInt);
+        disableSecurity();
+    }
+    
+    let ans = [];
+    try {
+        $('.q-slide').each(function(idx) {
+            const qid = $(this).data('qid'); const t =$(this).data('type'); let v = null;
+            if (t.includes('PG') && t !== 'PGKK') {
+                if (t === 'PGK') { v = []; $(this).find('input:checked').each(function() { v.push(decodeURIComponent($(this).val())) }); }
+                else { const checked = $(this).find('input:checked').val(); if(checked) v = decodeURIComponent(checked); }
+            }
+            else if (t === 'PGKK') { v = []; $(this).find('tbody tr').each(function(x) { v.push($(this).find('input:checked').val() || null) }); }
+            else if (t === 'Menjodohkan') { const raw = $(`#ans-in-${idx}`).val(); v = raw ? JSON.parse(raw) : []; }
+            else { v = $(this).find('textarea').val(); }
+            if (v !== null && v !== undefined) ans.push({ qid: qid, answer: v });
+        });
+    } catch(e) { console.error("Error collecting", e); }
+    
+    const d = new Date();
+    const localTime = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
+    
+    google.script.run
+    .withSuccessHandler((res) => {
+        // Jangan buka examSubmitting jika sudah sukses, biarkan terkunci
+        if (res.status === 'success') {
+            btn.prop('disabled', true).html('<i class="fas fa-check"></i> Terkirim');
+            localStorage.removeItem('cbt_active_exam'); localStorage.removeItem(`ANS_${user.ID}_${activeExamId}`);
+            
+            showLoad(true);
+            google.script.run
+            .withSuccessHandler(surveyRes => {
+                showLoad(false); stopBeep(); 
+                if(surveyRes.status === 'success' && surveyRes.data) {
+                    $('body').removeClass('exam-mode'); $('#view-exam').addClass('hidden');
+                    $('#view-countdown').removeClass('hidden');
+                    window.activeSurveyData = surveyRes.data;
+                    startCountdown();
+                } else {
+                    $('body').removeClass('exam-mode'); try { document.exitFullscreen().catch(()=>{}) } catch (e) {};
+                    Swal.fire({
+                        title: 'Hebat, Selesai!',
+                        html: `<div class="mb-3 text-success" style="font-size: 5rem;"><i class="fas fa-check-circle"></i></div><h5 class="fw-bold">Ujian Telah Terkirim Aman ke Server</h5><p class="text-muted mt-2">Terima kasih. Anda boleh keluar dari aplikasi.</p>`,
+                        confirmButtonText: 'KEMBALI KE BERANDA', confirmButtonColor: '#0f5132', allowOutsideClick: false, allowEscapeKey: false
+                    }).then(() => { $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home'); });
+                }
+            })
+            .withFailureHandler(err => {
+                showLoad(false); stopBeep(); 
+                Swal.fire('Selesai', 'Ujian telah terkirim.', 'success').then(() => {
+                    $('body').removeClass('exam-mode'); $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home');
+                });
+            }).checkActiveSurvey(activeExamId);
+            
+        } else { 
+            examSubmitting = false; // Buka kunci jika respons asli error/gagal sistem
+            btn.prop('disabled', false).html(originalText);
+            stopBeep();
+            Swal.fire('Gagal', res.msg || 'Terjadi kesalahan sistem.', 'error'); 
+        }
+    })
+    .withFailureHandler((err) => {
+        if (retryCount < 3) { setTimeout(() => processSubmission(retryCount + 1), 3000); } 
+        else { 
+            examSubmitting = false; btn.prop('disabled', false).html(originalText);
+            stopBeep(); Swal.fire('Koneksi Terputus', 'Gagal menghubungi server.', 'error'); 
+        }
+    }).submitExam(user.ID, activeExamId, ans, violationCount, localTime);
 }
 
 function changeFontSize(size) { $('.q-content').css('font-size', size + 'px'); }
@@ -2728,80 +2811,7 @@ function submitExamButton(force = false) {
     }).then((result) => { if (result.isConfirmed) { processSubmission(); } });
 }
 
-function processSubmission(retryCount = 0) {
-    if (examSubmitting && retryCount === 0) return;
-    examSubmitting = true;
-    const btn = $('#btn-finish'); const originalText = '<i class="fas fa-check-circle me-2"></i> Selesai Ujian';
-    if (retryCount === 0) {
-        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Mengirim Data...');
-        clearInterval(timerInt);
-        isExamFinished = true; disableSecurity();
-    }
-    let ans = [];
-    try {
-        $('.q-slide').each(function(idx) {
-            const qid = $(this).data('qid'); const t =$(this).data('type'); let v = null;
-            if (t.includes('PG') && t !== 'PGKK') {
-                if (t === 'PGK') { v = []; $(this).find('input:checked').each(function() { v.push(decodeURIComponent($(this).val())) }); }
-                else { const checked = $(this).find('input:checked').val(); if(checked) v = decodeURIComponent(checked); }
-            }
-            else if (t === 'PGKK') { v = []; $(this).find('tbody tr').each(function(x) { v.push($(this).find('input:checked').val() || null) }); }
-            else if (t === 'Menjodohkan') { const raw = $(`#ans-in-${idx}`).val(); v = raw ? JSON.parse(raw) : []; }
-            else { v = $(this).find('textarea').val(); }
-            if (v !== null && v !== undefined) ans.push({ qid: qid, answer: v });
-        });
-    } catch(e) { console.error("Error collecting", e); }
-    
-    const d = new Date();
-    const localTime = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
-    
-    google.script.run
-    .withSuccessHandler((res) => {
-        examSubmitting = false; btn.prop('disabled', false).html(originalText);
-        if (res.status === 'success') {
-            localStorage.removeItem('cbt_active_exam'); localStorage.removeItem(`ANS_${user.ID}_${activeExamId}`);
-            
-            showLoad(true);
-            google.script.run
-            .withSuccessHandler(surveyRes => {
-                showLoad(false);
-                stopBeep(); // Suara Pelanggaran 3 Berhenti Disini Saat Lanjut Survey
-                if(surveyRes.status === 'success' && surveyRes.data) {
-                    $('body').removeClass('exam-mode');$('#view-exam').addClass('hidden');
-                    $('#view-countdown').removeClass('hidden');
-                    window.activeSurveyData = surveyRes.data;
-                    startCountdown();
-                } else {
-                    $('body').removeClass('exam-mode'); try { document.exitFullscreen().catch(()=>{}) } catch (e) {};
-                    Swal.fire({
-                        title: 'Hebat, Selesai!',
-                        html: `<div class="mb-3 text-success" style="font-size: 5rem;"><i class="fas fa-check-circle"></i></div><h5 class="fw-bold">Ujian Telah Terkirim Aman ke Server</h5><p class="text-muted mt-2">Terima kasih. Anda boleh keluar dari aplikasi.</p>`,
-                        confirmButtonText: 'KEMBALI KE BERANDA', confirmButtonColor: '#0f5132', allowOutsideClick: false, allowEscapeKey: false
-                    }).then(() => { $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home'); });
-                }
-            })
-            .withFailureHandler(err => {
-                showLoad(false);
-                stopBeep(); // Suara Pelanggaran 3 Berhenti Disini Bila Gagal Memuat Survey
-                Swal.fire('Selesai', 'Ujian telah terkirim.', 'success').then(() => {
-                    $('body').removeClass('exam-mode'); $('#view-exam').addClass('hidden'); $('#view-dashboard').removeClass('hidden'); loadPage('siswa-home');
-                });
-            })
-            .checkActiveSurvey(activeExamId);
-            
-        } else { 
-            stopBeep();
-            Swal.fire('Gagal', res.msg || 'Terjadi kesalahan sistem.', 'error'); 
-        }
-    })
-    .withFailureHandler((err) => {
-        if (retryCount < 3) { setTimeout(() => processSubmission(retryCount + 1), 3000); } 
-        else { 
-            stopBeep(); // Hentikan bila koneksi putus
-            examSubmitting = false; btn.prop('disabled', false).html(originalText); Swal.fire('Koneksi Terputus', 'Gagal menghubungi server.', 'error'); 
-        }
-    }).submitExam(user.ID, activeExamId, ans, violationCount, localTime);
-}
+
 
 let countdownTimer;
 function startCountdown() {
