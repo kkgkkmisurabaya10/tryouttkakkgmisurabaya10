@@ -1852,17 +1852,29 @@ function renderContent(page) {
     else if (page === 'admin-ujian') {
         isSurveyMode = false;
         
-        // FILTER UNTUK GURU: Sembunyikan ujian yang waktu mulainya (StartDate) belum tiba
+        // FILTER UNTUK GURU: Sembunyikan ujian yang waktu mulainya belum tiba ATAU bukan untuk kelasnya
         let examsToRender = gData.exams;
         if (isGuru) {
             const now = Date.now();
             examsToRender = examsToRender.filter(e => {
+                // 1. Cek Waktu Aktif (StartDate)
+                let isTimeValid = true;
                 if (e.StartDate) {
                     const tStart = new Date(e.StartDate).getTime();
-                    // Hanya tampilkan jika waktu saat ini sudah melewati atau sama dengan waktu mulai
-                    return now >= tStart; 
+                    isTimeValid = now >= tStart; 
                 }
-                return true;
+                
+                // 2. Cek Kesesuaian Kelas (TargetKelas vs Kelas Guru)
+                let matchClass = false;
+                let tKelas = String(e.TargetKelas || '').trim().toLowerCase();
+                let uKelas = String(user.Kelas || '').trim().toLowerCase();
+                
+                // Izinkan jika target = 'all', 'semua', kosong, sama dengan kelas guru, atau mengandung kelas guru
+                if (tKelas === 'all' || tKelas === 'semua' || tKelas === '' || tKelas === uKelas || tKelas.includes(uKelas)) {
+                    matchClass = true;
+                }
+
+                return isTimeValid && matchClass;
             });
         }
 
@@ -1873,7 +1885,7 @@ function renderContent(page) {
         if(!isGuru) {
             h += `<button class="btn btn-primary shadow-sm px-4 py-2 rounded-pill fw-bold" onclick="openExamModal()"><i class="fas fa-plus me-2"></i>Buat Jadwal Baru</button>`;
         } else {
-            h += `<div><h5 class="fw-bold text-primary mb-0"><i class="fas fa-folder-open me-2"></i>Daftar Bank Soal KKGMI</h5><p class="small text-muted m-0">Guru hanya bisa melihat & mengunduh soal ujian yang sudah aktif berjalan.</p></div>`;
+            h += `<div><h5 class="fw-bold text-primary mb-0"><i class="fas fa-folder-open me-2"></i>Daftar Bank Soal KKGMI</h5><p class="small text-muted m-0">Guru hanya bisa melihat & mengunduh soal yang sudah aktif berjalan khusus untuk kelas Anda.</p></div>`;
         }
         
         h += `<div class="d-flex gap-2 bg-white p-2 rounded-pill shadow-sm border">
@@ -1883,7 +1895,7 @@ function renderContent(page) {
              </div></div><div class="row g-4" id="admin-ujian-list">`;
              
         if(examsToRender.length === 0) {
-            h += `<div class="col-12"><div class="alert alert-light text-center py-5 border shadow-sm rounded-4 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-50"></i><br>Belum ada jadwal ujian yang aktif untuk ditampilkan.</div></div>`;
+            h += `<div class="col-12"><div class="alert alert-light text-center py-5 border shadow-sm rounded-4 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-50"></i><br>Belum ada jadwal ujian yang aktif untuk kelas Anda saat ini.</div></div>`;
         } else {
             examsToRender.forEach(e => {
                 let actionButtons = '';
