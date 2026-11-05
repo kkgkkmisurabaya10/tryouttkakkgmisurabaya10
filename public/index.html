@@ -796,7 +796,7 @@ function handleUploadUsersExcel(e) {
         
         let formattedData = json.map(row => {
             return {
-                id: 'S-' + Date.now() + Math.floor(Math.random() * 10000),
+                id: 'S-' + Date.now() + Math.random().toString(36).substr(2, 9),
                 nama: row['Nama'] || '',
                 username: String(row['Username'] || '').trim(),
                 password: String(row['Password'] || '').trim(),
