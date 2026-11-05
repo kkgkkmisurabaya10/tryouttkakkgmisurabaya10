@@ -368,8 +368,9 @@ if (action === 'getExamPack') {
 
     if (action === 'getRecapList') {
       const [role, , sekolah] = args;
+      // PERBAIKAN: Menghapus r.Detail dari query ini agar ringan dan tidak menyebabkan timeout
       let sql = `
-        SELECT r.ResultID, r.TotalNilai, r.WaktuSubmit, r.Detail, r.SiswaID, r.ExamID, r.Pelanggaran,
+        SELECT r.ResultID, r.TotalNilai, r.WaktuSubmit, r.SiswaID, r.ExamID, r.Pelanggaran,
                COALESCE(u.Nama, 'Akun Telah Dihapus') AS NamaSiswa, 
                COALESCE(u.Kelas, '-') AS KelasSiswa, 
                COALESCE(u.Sekolah, '-') AS SekolahSiswa,
@@ -388,7 +389,15 @@ if (action === 'getExamPack') {
       }
       
       const results = await turso.execute({ sql: sql, args: pArgs });
-      return NextResponse.json({ status: 'success', data: results.rows });
+      
+      // PERBAIKAN: Menambahkan kolom Detail palsu (berupa string kosong atau '[]')
+      // agar kode frontend Anda (seperti isSurvey checker) tidak error saat mencoba melakukan JSON.parse.
+      const modifiedRows = results.rows.map(row => ({
+          ...row,
+          Detail: row.Mapel === 'SURVEY' ? '[{"responses":[]}]' : '[]' 
+      }));
+
+      return NextResponse.json({ status: 'success', data: modifiedRows });
     }
 
     if (action === 'getSiswaDetailHasil') {
