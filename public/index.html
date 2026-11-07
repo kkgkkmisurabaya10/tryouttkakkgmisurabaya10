@@ -1466,8 +1466,27 @@ function printFilteredRecap() {
 function printRecap(rid) {
   const d = recapDataStore[rid]; if(!d) return;
   let namaPengawas = d.pembuat || user.Nama;
+  
   let detailArr = []; 
-  try { detailArr = JSON.parse(d.detail); } catch(e) {}
+  
+  // PERBAIKAN: Logika parse yang lebih tangguh
+  if (d.detail) {
+      if (typeof d.detail === 'string') {
+          try {
+              detailArr = JSON.parse(d.detail);
+          } catch(e) {
+              console.error("Gagal parse string d.detail:", e);
+          }
+      } else if (typeof d.detail === 'object') {
+          // Jika entah bagaimana data sudah berupa objek (bukan string JSON)
+          detailArr = d.detail;
+      }
+  }
+
+  // Jika setelah dicoba parse ternyata masih bukan array (misal null atau undefined)
+  if (!Array.isArray(detailArr)) {
+      detailArr = [];
+  }
   
   let isSurvey = false;
   if (detailArr.length > 0 && detailArr[0].responses !== undefined) {
