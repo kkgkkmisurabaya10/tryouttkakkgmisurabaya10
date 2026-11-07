@@ -402,8 +402,9 @@ if (action === 'getExamPack') {
 
     if (action === 'getSiswaDetailHasil') {
       const rid = args[0];
-      const results = await turso.execute({ sql: "SELECT r.TotalNilai, r.Detail, e.Judul, e.Mapel FROM Results r JOIN Exams e ON r.ExamID = e.ExamID WHERE r.ResultID = ?", args: [rid] });
-      return NextResponse.json({ status: 'success', data: results.rows[0] });
+      // Data Detail diambil langsung dari database
+const results = await turso.execute({ sql: "SELECT r.TotalNilai, r.Detail, e.Judul, e.Mapel FROM Results r JOIN Exams e ON r.ExamID = e.ExamID WHERE r.ResultID = ?", args: [rid] });
+return NextResponse.json({ status: 'success', data: results.rows[0] });
     }
 
     if (action === 'adminUpdateResult') {
