@@ -2312,13 +2312,13 @@ function dlSiswaHasil(rid) {
     .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
-            // Kita simpan hasil detail ini ke dalam recapDataStore, 
-            // lalu panggil fungsi printRecap yang sudah ada
             let pembuat = 'Pengawas / Sistem';
-            
-            // Mencoba mengambil data nama siswa dari tabel recap yang sedang aktif
-            const rowData = window.currentFilteredData ? window.currentFilteredData.find(x => x.ResultID === rid) : null;
-            let namaSiswa = rowData ? rowData.NamaSiswa : user.Nama;
+            let namaSiswa = user.Nama; 
+
+            // PERBAIKAN: Ambil nama dari memori recapDataStore yang 100% akurat
+            if (recapDataStore[rid] && recapDataStore[rid].nama) {
+                namaSiswa = recapDataStore[rid].nama;
+            }
 
             recapDataStore[rid] = { 
                 detail: res.data.Detail, 
@@ -2327,7 +2327,7 @@ function dlSiswaHasil(rid) {
                 nilai: res.data.TotalNilai, 
                 pembuat: pembuat 
             };
-            printRecap(rid); // PrintRecap akan menyusun HTML dan mencetak PDF-nya
+            printRecap(rid); 
         } else { Swal.fire('Error', res.msg, 'error'); }
     })
     .withFailureHandler(err => {
@@ -2335,6 +2335,7 @@ function dlSiswaHasil(rid) {
     })
     .getSiswaDetailHasil(rid);
 }
+    
 function addNewQuestionBlock() {
     lastQuestionNum++; const newBlock = renderQuestionBlock({ Nomor: lastQuestionNum, Tipe: isSurveyMode ? 'SURVEY' : 'PGS' }, lastQuestionNum - 1);
     $('#q-list-container').append(newBlock); const uid = $(newBlock).attr('data-id');
