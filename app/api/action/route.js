@@ -47,7 +47,7 @@ export async function POST(req) {
     }
 
     if (action === 'getDashboardData') {
-      const [role, userId, , sekolah] = args; 
+      const [role, userId, , sekolah, filterMapel] = args; 
       let exams, users;
       
       if (role === 'guru') {
@@ -60,7 +60,6 @@ export async function POST(req) {
       
       let output = { logo: 'https://lh3.googleusercontent.com/d/1SCvmdQxuqmX_f0gBaYt0Ob53Tws97Hnq' };
       
-      // Ambil Sesi Global dan Jam Sesi
       try {
         const settings = await turso.execute("SELECT * FROM Settings WHERE KeyName IN ('SesiAktif', 'JamSesi1', 'JamSesi2', 'JamSesi3')");
         output.sesiAktif = '1'; output.jamSesi1 = '07.30 - 09.00'; output.jamSesi2 = '09.30 - 11.00'; output.jamSesi3 = '11.30 - 13.00';
@@ -80,7 +79,6 @@ export async function POST(req) {
             activeUjian: exams.rows.filter(e => e.Status === 'Aktif').length 
         };
 
-        // TAMBAHAN: Menghitung jumlah peserta per sekolah
         let schoolCounts = {};
         users.rows.forEach(u => {
             let s = (u.Sekolah || 'Tanpa Sekolah').trim();
@@ -89,33 +87,35 @@ export async function POST(req) {
         output.schoolSummary = Object.keys(schoolCounts).map(k => ({
             Sekolah: k,
             Jumlah: schoolCounts[k]
-        })).sort((a, b) => b.Jumlah - a.Jumlah); // Urutkan dari siswa terbanyak
+        })).sort((a, b) => b.Jumlah - a.Jumlah); 
 
-        const schoolRankQuery = await turso.execute(`
+        // PERBAIKAN: Menambahkan filter mapel pada SQL Ranking
+        let sqlRank = `
             SELECT u.Sekolah, AVG(r.TotalNilai) as RataRata 
             FROM Results r 
             JOIN Users u ON r.SiswaID = u.ID 
             JOIN Exams e ON r.ExamID = e.ExamID
-            WHERE e.Mapel != 'SURVEY' ${role === 'guru' ? "AND e.ShowStats IN ('Yes', 'Aktif')" : ""}
-            GROUP BY u.Sekolah 
-            ORDER BY RataRata DESC
-        `);
+            WHERE e.Mapel != 'SURVEY' 
+        `;
+        let rankArgs = [];
+        
+        if (role === 'guru') {
+            sqlRank += " AND e.ShowStats IN ('Yes', 'Aktif')";
+        }
+        if (filterMapel && filterMapel !== 'ALL') {
+            sqlRank += " AND e.Mapel = ?";
+            rankArgs.push(filterMapel);
+        }
+        sqlRank += " GROUP BY u.Sekolah ORDER BY RataRata DESC";
+
+        const schoolRankQuery = await turso.execute({ sql: sqlRank, args: rankArgs });
         output.schoolRanks = schoolRankQuery.rows;
 
-        if (role === 'guru') {
-            const studentRankQuery = await turso.execute({
-                sql: `SELECT u.Nama, u.Kelas, e.Mapel, AVG(r.TotalNilai) as RataRata 
-                      FROM Results r 
-                      JOIN Users u ON r.SiswaID = u.ID 
-                      JOIN Exams e ON r.ExamID = e.ExamID 
-                      WHERE LOWER(TRIM(u.Sekolah)) = LOWER(TRIM(?)) AND e.Mapel != 'SURVEY' AND e.ShowStats IN ('Yes', 'Aktif')
-                      GROUP BY u.ID, e.Mapel 
-                      ORDER BY e.Mapel ASC, RataRata DESC`,
-                args: [sekolah]
-            });
-            output.studentRanks = studentRankQuery.rows;
-        }
-        
+        // Mendapatkan daftar mapel unik untuk dropdown di frontend
+        const mapelsQuery = await turso.execute("SELECT DISTINCT Mapel FROM Exams WHERE Mapel != 'SURVEY'");
+        output.uniqueMapels = mapelsQuery.rows.map(r => r.Mapel);
+        output.currentMapelFilter = filterMapel || 'ALL';
+
         if (role === 'admin') {
             const surveys = await turso.execute("SELECT * FROM Exams WHERE Mapel = 'SURVEY'");
             output.surveys = surveys.rows;
