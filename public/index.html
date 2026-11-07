@@ -1762,7 +1762,23 @@ function renderContent(page) {
     const isGuru = String(user.Role).trim().toLowerCase() === 'guru';
 
     if (page === 'admin-home') {
-        let schoolTable = `<div class="table-responsive"><table class="table table-sm table-hover text-center"><thead><tr class="table-light"><th>Rank</th><th>Sekolah</th><th>Rata-rata CBT</th></tr></thead><tbody>`;
+        // Buat Dropdown Filter Mapel
+        let mapelOptions = `<option value="ALL" ${gData.currentMapelFilter === 'ALL' ? 'selected' : ''}>Gabungan Semua Mapel</option>`;
+        if (gData.uniqueMapels && gData.uniqueMapels.length > 0) {
+            gData.uniqueMapels.forEach(m => {
+                mapelOptions += `<option value="${m}" ${gData.currentMapelFilter === m ? 'selected' : ''}>Peringkat ${m}</option>`;
+            });
+        }
+        
+        let filterHtml = `
+            <div class="mb-3 d-flex justify-content-end">
+                <select class="form-select form-select-sm border-primary text-primary fw-bold" style="width: 250px; border-radius: 20px;" onchange="updateRankFilter(this.value)">
+                    ${mapelOptions}
+                </select>
+            </div>
+        `;
+
+        let schoolTable = `<div id="tabel-peringkat-container"><div class="table-responsive"><table class="table table-sm table-hover text-center"><thead><tr class="table-light"><th>Rank</th><th>Sekolah</th><th>Rata-rata CBT</th></tr></thead><tbody>`;
         if(gData.schoolRanks && gData.schoolRanks.length > 0) {
             if (isGuru) {
                 const myRankIndex = gData.schoolRanks.findIndex(s => s.Sekolah === user.Sekolah);
@@ -1776,9 +1792,10 @@ function renderContent(page) {
                     schoolTable += `<tr class="${isMySchool}"><td>${i+1}</td><td class="text-start">${s.Sekolah}</td><td><span class="badge bg-primary rounded-pill">${Number(s.RataRata).toFixed(2)}</span></td></tr>`;
                 });
             }
+        } else {
+            schoolTable += `<tr><td colspan="3" class="text-muted">Belum ada data nilai untuk kategori ini.</td></tr>`;
         }
-        schoolTable += `</tbody></table></div>`;
-
+        schoolTable += `</tbody></table></div></div>`;
         // TAMBAHAN: Tabel Ringkasan Peserta Per Sekolah
         let schoolSummaryTable = `<div class="table-responsive"><table class="table table-sm table-hover text-center"><thead><tr class="table-light"><th class="text-start">Sekolah</th><th>Total Peserta</th></tr></thead><tbody>`;
         if (gData.schoolSummary && gData.schoolSummary.length > 0) {
@@ -1836,10 +1853,18 @@ function renderContent(page) {
                 <div class="col-md-6"><div class="card p-4 shadow-sm border-0 rounded-4" style="background: linear-gradient(135deg, #d4af37, #b48500); color: white;"><div class="d-flex justify-content-between align-items-center"><div><h1 class="fw-bold display-4 m-0">${gData.stats.totalUjian}</h1><p class="m-0 fs-5">Total Ujian Aktif</p></div><i class="fas fa-folder-open fa-4x opacity-50"></i></div></div></div>
              </div>
              
-             <!-- TAMBAHAN: Layout 2 Kolom untuk Peringkat dan Ringkasan -->
+<!-- Layout 2 Kolom untuk Peringkat dan Ringkasan -->
              <div class="row g-4">
                 <div class="col-md-7">
-                    <div class="card shadow-sm border-0 rounded-4 h-100"><div class="card-body p-4"><h5 class="fw-bold text-primary mb-3"><i class="fas fa-trophy me-2"></i>Peringkat Rata-Rata CBT</h5>${schoolTable}</div></div>
+                    <div class="card shadow-sm border-0 rounded-4 h-100">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold text-primary m-0"><i class="fas fa-trophy me-2"></i>Peringkat Rata-Rata CBT</h5>
+                                ${filterHtml}
+                            </div>
+                            ${schoolTable}
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-5">
                     <div class="card shadow-sm border-0 rounded-4 h-100"><div class="card-body p-4"><h5 class="fw-bold text-success mb-3"><i class="fas fa-school me-2"></i>Ringkasan Peserta</h5>${schoolSummaryTable}</div></div>
@@ -2015,7 +2040,20 @@ function filterAdminUjian() {
         $(this).toggle(matchMapel && matchKelas);
     });
 }
-
+function updateRankFilter(mapel) {
+    const area = $('#content-area');
+    // Berikan efek loading kecil pada tabel peringkat
+    area.find('#tabel-peringkat-container').html('<div class="text-center p-3"><i class="fas fa-spinner fa-spin text-primary fa-2x"></i></div>');
+    
+    google.script.run
+    .withSuccessHandler(res => {
+        if (res.status === 'success') {
+            gData = res.data;
+            renderContent('admin-home'); // Render ulang dashboard dengan data baru
+        }
+    })
+    .getDashboardData(user.Role, user.ID, user.Kelas, user.Sekolah, mapel);
+}
 function openSurveyModal(str) {
     let optExams = `<option value="">-- Pilih Ujian TKA Yang Relevan --</option>`;
     gData.exams.forEach(e => { optExams += `<option value="${e.ExamID}">${e.Judul} (${e.Mapel})</option>`; });
@@ -2274,8 +2312,22 @@ function dlSiswaHasil(rid) {
     .withSuccessHandler(res => {
         showLoad(false);
         if(res.status === 'success') {
-            recapDataStore[rid] = { detail: res.data.Detail, nama: user.Nama, ujian: res.data.Judul, nilai: res.data.TotalNilai, pembuat: 'Pengawas Sekolah' };
-            printRecap(rid);
+            // Kita simpan hasil detail ini ke dalam recapDataStore, 
+            // lalu panggil fungsi printRecap yang sudah ada
+            let pembuat = 'Pengawas / Sistem';
+            
+            // Mencoba mengambil data nama siswa dari tabel recap yang sedang aktif
+            const rowData = window.currentFilteredData ? window.currentFilteredData.find(x => x.ResultID === rid) : null;
+            let namaSiswa = rowData ? rowData.NamaSiswa : user.Nama;
+
+            recapDataStore[rid] = { 
+                detail: res.data.Detail, 
+                nama: namaSiswa, 
+                ujian: res.data.Judul, 
+                nilai: res.data.TotalNilai, 
+                pembuat: pembuat 
+            };
+            printRecap(rid); // PrintRecap akan menyusun HTML dan mencetak PDF-nya
         } else { Swal.fire('Error', res.msg, 'error'); }
     })
     .withFailureHandler(err => {
@@ -2283,7 +2335,6 @@ function dlSiswaHasil(rid) {
     })
     .getSiswaDetailHasil(rid);
 }
-
 function addNewQuestionBlock() {
     lastQuestionNum++; const newBlock = renderQuestionBlock({ Nomor: lastQuestionNum, Tipe: isSurveyMode ? 'SURVEY' : 'PGS' }, lastQuestionNum - 1);
     $('#q-list-container').append(newBlock); const uid = $(newBlock).attr('data-id');
