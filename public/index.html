@@ -532,7 +532,13 @@ $(document).ready(() => {
     if(!savedUser) { window.location.href = '/'; return; }
     user = JSON.parse(savedUser);
     $('#logo-container img').attr('src', user.LogoUrl || 'https://lh3.googleusercontent.com/d/1SCvmdQxuqmX_f0gBaYt0Ob53Tws97Hnq');
-    initDash(); checkResumeExam();
+    
+    initDash(); 
+    
+    // PERBAIKAN: Berikan jeda 1 detik agar loading dashboard selesai sebelum popup muncul
+    setTimeout(() => {
+        checkResumeExam();
+    }, 1000);
 });
 
 function applyMathJax() { if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise().catch((err) => console.log('MathJax Error:', err)); } }
